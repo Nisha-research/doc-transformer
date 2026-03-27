@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { HeroSection } from '@/components/HeroSection';
 import { FileUploadZone } from '@/components/FileUploadZone';
@@ -8,6 +8,8 @@ import { FeaturesSection } from '@/components/FeaturesSection';
 import { Footer } from '@/components/Footer';
 import { type UploadedFile } from '@/lib/file-utils';
 import { type OutputMode } from '@/lib/output-modes';
+import { streamDocument, extractTextFromFiles } from '@/lib/ai-stream';
+import { toast } from 'sonner';
 
 type AppStep = 'upload' | 'select-mode' | 'results';
 
@@ -24,24 +26,43 @@ const Index = () => {
     setStep('select-mode');
   };
 
-  const handleModeSelect = (mode: OutputMode, level: number) => {
+  const handleModeSelect = useCallback(async (mode: OutputMode, level: number) => {
     setSelectedMode(mode);
     setKnowledgeLevel(level);
     setStep('results');
     setIsLoading(true);
+    setResult('');
 
-    // Simulate AI processing for now — will be replaced with edge function
-    setTimeout(() => {
-      setResult(
-        `# ${mode.label} — Generated Output\n\n` +
-        `Knowledge level: ${level < 33 ? 'Beginner' : level < 66 ? 'Intermediate' : 'Expert'}\n` +
-        `Files analyzed: ${uploadedFiles.map(f => f.tag).join(', ')}\n\n` +
-        `This is a placeholder result. Once Lovable Cloud is enabled, this will be powered by AI to generate real ${mode.label.toLowerCase()} from your uploaded documents.\n\n` +
-        `The output will be tailored to your selected knowledge level and formatted specifically for the "${mode.label}" output mode.`
+    try {
+      const documentText = await extractTextFromFiles(
+        uploadedFiles.map(f => ({ file: f.file, tag: f.tag }))
       );
+
+      let accumulated = '';
+      await streamDocument({
+        documentText,
+        modeId: mode.id,
+        knowledgeLevel: level,
+        fileTags: uploadedFiles.map(f => f.tag),
+        onDelta: (text) => {
+          accumulated += text;
+          setResult(accumulated);
+        },
+        onDone: () => {
+          setIsLoading(false);
+        },
+        onError: (error) => {
+          setIsLoading(false);
+          setResult(null);
+          toast.error(error);
+        },
+      });
+    } catch (e) {
       setIsLoading(false);
-    }, 2000);
-  };
+      setResult(null);
+      toast.error('Failed to process document. Please try again.');
+    }
+  }, [uploadedFiles]);
 
   const handleBackToUpload = () => {
     setStep('upload');
