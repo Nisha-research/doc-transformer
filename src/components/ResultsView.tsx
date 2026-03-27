@@ -30,7 +30,7 @@ export function ResultsView({ mode, knowledgeLevel, isLoading, result, onBack }:
         </div>
 
         <div className="rounded-xl bg-card border border-border shadow-soft p-6 min-h-[300px]">
-          {isLoading ? (
+          {isLoading && !result ? (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-student" />
               <p className="text-sm text-muted-foreground">Generating {mode.label.toLowerCase()}...</p>
@@ -38,6 +38,7 @@ export function ResultsView({ mode, knowledgeLevel, isLoading, result, onBack }:
           ) : result ? (
             <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">
               {result}
+              {isLoading && <span className="inline-block w-2 h-4 bg-student animate-pulse ml-1" />}
             </div>
           ) : (
             <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
