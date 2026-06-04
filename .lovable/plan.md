@@ -1,117 +1,68 @@
+# StudyForge → Premium AI Knowledge Workspace
 
-
-# StudyForge — AI-Powered Document Intelligence Platform
-
-## Vision
-A no-login, privacy-first web app where anyone can upload documents and instantly get AI-generated study materials, professional summaries, and creative outputs — tailored to their knowledge level and use case.
+This is a very large scope (themes, workspace layout, 23+ output modes, Claude-style docs, NotebookLM-style visuals, PPT/image/audio generators, flashcards, quizzes, chat-with-docs, exports). Building all of it in one pass would produce shallow features. I'll deliver it in focused phases so each lands polished. **This plan covers Phase 1–3; later phases will be planned after you see the foundation.**
 
 ---
 
-## Phase 1: Core Foundation
+## Phase 1 — Foundation (this round)
 
-### Landing Page
-- Modern, polished design with gradient accents and smooth animations
-- Hero section: "Transform any document into knowledge" with drag-and-drop upload zone
-- Visible trust indicator: countdown timer showing "Your files will be deleted in X minutes"
-- Anonymous session system using localStorage tokens (no login required)
-- Output mode selector grid organized by audience (Students, Professionals, Creators, Researchers, General Public)
+### 1. Theme System
 
-### File Upload System
-- Drag-and-drop + click-to-upload for PDF, TXT, and PPT files
-- Multi-file upload support (up to 5 files)
-- File size limit (20MB per file) with client-side validation
-- Upload progress indicators
-- File type validation (MIME type checking)
+- `next-themes` provider + `ThemeToggle` in navbar (sun/moon).
+- Light: white bg / slate-50 cards / slate-900 text. Dark: slate-950 / slate-900 / slate-100.
+- Update `index.css` HSL tokens for both modes, smooth color transitions.
+- Persists to localStorage, respects system preference.
 
-### Knowledge Level Slider
-- Beginner → Intermediate → Expert slider on every generation
-- Controls AI output tone: analogies & simple language vs. technical density
+### 2. Expanded Output Modes (from your image + spec — 28 total)
 
----
+Reorganized into 4 categories with icons:
 
-## Phase 2: AI Processing & Output Modes
+- **Academic**: Structured Study Notes, Comic Strip Panels, Interactive Mind Map, Chronological Timeline, Active Recall MCQ Trivia, Flashcards, Exam Prep, Cheat Sheet, Glossary, Study Guide, Lecture Notes, Lesson Plan
+- **Professional**: Covenant/Risk Assessment, Investigative Executive Digest, Meeting Notes, SOP Generator, Resume Bullets, Case Study,Chronological Timeline,  Comparative Synthesis
+- **Creator**: Social Hook Threads (Twitter), LinkedIn Post, Blog Article, Podcast Script
+- **General**: Smart Notes, Executive Summary, FAQ, Book Summary, Research Report,Chronological Timeline, Comic Strip Panels, Interactive Mind Map
 
-### Edge Function Backend (Lovable Cloud)
-- File text extraction via edge functions
-- AI processing through Lovable AI gateway
-- Session-based file management with auto-cleanup timer
+Each as a card with Lucide icon, gradient accent, description. Update edge-function system prompts to match.
 
-### Student Output Modes
-- **Smart Notes**: Key points, bullets, structured summaries
-- **Flashcards**: Q&A pairs with flip-card UI
-- **Exam Prep**: Likely questions + model answers
-- **Active Recall**: Auto-quiz with 3-5 questions after every generation
+### 3. Workspace Layout (replaces current ResultsView)
 
-### Professional Output Modes
-- **Executive Summary**: TL;DR for busy readers
-- **Action Items**: Tasks, owners, deadlines extracted
-- **Briefing Memo**: One-page stakeholder brief
-- **Risk Highlights**: Flags issues, legal gaps
+Three-pane shell using `react-resizable-panels`:
 
-### Creator & Writer Modes
-- **Blog Outline**: SEO-ready structure
-- **Social Snippets**: Twitter/LinkedIn-ready posts
-- **Podcast Script**: Two-host dialogue format
-- **Newsletter Draft**: Ready-to-send copy
+- **Left sidebar**: uploaded documents list, source chips, collections placeholder.
+- **Center**: generated output (Claude-style renderer — see below).
+- **Right sidebar**: quick actions (regenerate, change mode), export buttons (MD/PDF/TXT), related output suggestions.
+- **Top toolbar**: editable workspace title, search input (stub), download menu, share (copy link), theme toggle.
+- Collapsible sidebars; mobile = stacked tabs.
 
-### Researcher Modes
-- **Data Extraction**: Tables and numbers as structured output
-- **Comparative Analysis**: Multi-doc side-by-side comparison
-- **Citation Map**: Key claims + sources
-- **Hypothesis Gen**: Gap analysis and ideas
+### 4. Claude-Style Document Renderer
 
-### General Public Modes
-- **Plain English**: ELI5 for any topic
-- **Myth vs Fact**: Misconceptions busted
-- **FAQ Generator**: Top 10 questions answered
-- **Timeline**: Visual chronology of events
+- `react-markdown` + `remark-gfm` + `rehype-slug` + `rehype-autolink-headings`.
+- Custom components for h1/h2/h3, callouts (`> [!NOTE]`), tables, code (with `react-syntax-highlighter`), bullets.
+- Max-width ~850px, refined typography (serif display + sans body).
+- Auto-generated **sticky TOC** on desktop from headings.
+- Streaming-aware (renders as tokens arrive).
 
 ---
 
-## Phase 3: Multi-Document Synthesis
+## Phase 2 — Interactive Outputs (next round)
 
-- Upload multiple files and tag them (e.g., "Paper A", "Chapter 2")
-- Compare & contrast mode: side-by-side analysis across documents
-- Synthesis mode: unified summary pulling from all sources
-- Source attribution: every claim linked back to its source document
+Flashcards (flip + spaced repetition + progress), Active Recall quiz UI (MCQ/T-F/fill-blank with scoring), full Export Center (PDF via `jspdf`, DOCX via `docx`, PPTX via `pptxgenjs`), Mind Map visual (react-flow), Timeline visual, Comparison Tables.
 
----
+## Phase 3 — Generators & Chat (later round)
 
-## Phase 4: Active Recall & Spaced Repetition
-
-- After any output generation, auto-generate 3-5 comprehension questions
-- Flip-card quiz interface with self-rating (Easy / Medium / Hard)
-- Session-based spaced repetition scheduling
-- Progress tracking within the session
-- Export flashcards as downloadable format
+PPT Generator with slide previews, Image Studio (Gemini image gen via Lovable AI), Audio/Podcast (TTS), AI Chat-with-documents (citations + multi-doc), Document Viewer with PDF.js.
 
 ---
 
-## Phase 5: Study Rooms (Collaboration)
+## Technical Notes
 
-- Create a shareable "Document Room" via unique link
-- Multiple users can upload documents to the same room
-- Real-time collaborative annotations on generated content
-- Shared output generation — everyone sees results simultaneously
-- Room auto-expires after configurable time (1-24 hours)
-
----
-
-## Design System
-- **Style**: Modern & polished with gradient accents
-- **Color palette**: Deep navy primary, vibrant gradient accents per output category (matching your diagram — blue for students, teal for professionals, green for creators, etc.)
-- **Animations**: Smooth transitions, loading states with progress indicators
-- **Layout**: Clean, spacious, card-based UI
-- **Mobile responsive**: Full functionality on all devices
-- **Trust elements**: File deletion countdown, "no data stored" badges, open processing indicators
+- New deps: `next-themes`, `react-markdown`, `remark-gfm`, `rehype-slug`, `rehype-autolink-headings`, `react-syntax-highlighter`, `react-resizable-panels`.
+- Edge function `process-document/index.ts`: extend `SYSTEM_PROMPTS` map with new mode IDs; instruct model to emit rich markdown (headings, callouts, tables) for long-form modes.
+- `output-modes.ts`: full rewrite with 28 modes across 4 categories.
+- New components: `ThemeToggle`, `WorkspaceShell`, `WorkspaceSidebar`, `WorkspaceToolbar`, `ActionsPanel`, `DocumentRenderer`, `TableOfContents`.
+- `Index.tsx`: swap ResultsView → WorkspaceShell on results state.
+- No backend schema changes in Phase 1 (still no-login, session-based).
 
 ---
 
-## Security & Privacy
-- Anonymous sessions with auto-expiring tokens
-- Rate limiting per session + IP
-- Server-side file validation in edge functions
-- No PII stored — files processed and discarded
-- Visible countdown timer for file deletion
-- Input sanitization before AI processing
-
+**Confirm to proceed with Phase 1**, or tell me to re-prioritize (e.g. "do PPT generator first" or "skip workspace layout, just add modes + theme").
