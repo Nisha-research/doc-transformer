@@ -3,11 +3,11 @@ import { Navbar } from '@/components/Navbar';
 import { HeroSection } from '@/components/HeroSection';
 import { FileUploadZone } from '@/components/FileUploadZone';
 import { OutputModeSelector } from '@/components/OutputModeSelector';
-import { ResultsView } from '@/components/ResultsView';
+import { WorkspaceShell } from '@/components/WorkspaceShell';
 import { FeaturesSection } from '@/components/FeaturesSection';
 import { Footer } from '@/components/Footer';
 import { type UploadedFile } from '@/lib/file-utils';
-import { type OutputMode } from '@/lib/output-modes';
+import { type OutputMode, getModeById } from '@/lib/output-modes';
 import { streamDocument, extractTextFromFiles } from '@/lib/ai-stream';
 import { toast } from 'sonner';
 
@@ -26,31 +26,24 @@ const Index = () => {
     setStep('select-mode');
   };
 
-  const handleModeSelect = useCallback(async (mode: OutputMode, level: number) => {
-    setSelectedMode(mode);
-    setKnowledgeLevel(level);
-    setStep('results');
+  const runGeneration = useCallback(async (mode: OutputMode, level: number, files: UploadedFile[]) => {
     setIsLoading(true);
     setResult('');
-
     try {
       const documentText = await extractTextFromFiles(
-        uploadedFiles.map(f => ({ file: f.file, tag: f.tag }))
+        files.map(f => ({ file: f.file, tag: f.tag }))
       );
-
       let accumulated = '';
       await streamDocument({
         documentText,
         modeId: mode.id,
         knowledgeLevel: level,
-        fileTags: uploadedFiles.map(f => f.tag),
+        fileTags: files.map(f => f.tag),
         onDelta: (text) => {
           accumulated += text;
           setResult(accumulated);
         },
-        onDone: () => {
-          setIsLoading(false);
-        },
+        onDone: () => setIsLoading(false),
         onError: (error) => {
           setIsLoading(false);
           setResult(null);
@@ -62,7 +55,26 @@ const Index = () => {
       setResult(null);
       toast.error('Failed to process document. Please try again.');
     }
-  }, [uploadedFiles]);
+  }, []);
+
+  const handleModeSelect = useCallback(async (mode: OutputMode, level: number) => {
+    setSelectedMode(mode);
+    setKnowledgeLevel(level);
+    setStep('results');
+    await runGeneration(mode, level, uploadedFiles);
+  }, [uploadedFiles, runGeneration]);
+
+  const handleRegenerate = useCallback(() => {
+    if (!selectedMode) return;
+    runGeneration(selectedMode, knowledgeLevel, uploadedFiles);
+  }, [selectedMode, knowledgeLevel, uploadedFiles, runGeneration]);
+
+  const handleSwitchMode = useCallback((modeId: string) => {
+    const newMode = getModeById(modeId);
+    if (!newMode) return;
+    setSelectedMode(newMode);
+    runGeneration(newMode, knowledgeLevel, uploadedFiles);
+  }, [knowledgeLevel, uploadedFiles, runGeneration]);
 
   const handleBackToUpload = () => {
     setStep('upload');
@@ -80,11 +92,12 @@ const Index = () => {
       <Navbar />
 
       {step === 'upload' && (
-        <>
+        <div className="pt-16">
           <HeroSection />
           <FileUploadZone onFilesReady={handleFilesReady} />
           <FeaturesSection />
-        </>
+          <Footer />
+        </div>
       )}
 
       {step === 'select-mode' && (
@@ -98,18 +111,19 @@ const Index = () => {
       )}
 
       {step === 'results' && selectedMode && (
-        <div className="pt-20">
-          <ResultsView
+        <div className="pt-16">
+          <WorkspaceShell
             mode={selectedMode}
-            knowledgeLevel={knowledgeLevel}
-            isLoading={isLoading}
+            files={uploadedFiles}
             result={result}
+            isLoading={isLoading}
+            knowledgeLevel={knowledgeLevel}
             onBack={handleBackToModes}
+            onRegenerate={handleRegenerate}
+            onSwitchMode={handleSwitchMode}
           />
         </div>
       )}
-
-      <Footer />
     </div>
   );
 };

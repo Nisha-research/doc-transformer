@@ -1,6 +1,7 @@
-import { Shield, Clock, Zap } from 'lucide-react';
+import { Clock, Shield, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useSession } from '@/hooks/use-session';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export function Navbar() {
   const { timeRemaining, formatTime } = useSession();
@@ -20,18 +21,20 @@ export function Navbar() {
           <span className="font-display text-xl font-bold text-foreground">StudyForge</span>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
             <Shield className="w-3.5 h-3.5" />
             <span>No login required</span>
           </div>
 
           {timeRemaining > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-xs font-medium text-muted-foreground">
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-xs font-medium text-muted-foreground">
               <Clock className="w-3.5 h-3.5" />
-              <span>Files auto-delete in {formatTime(timeRemaining)}</span>
+              <span>Auto-delete in {formatTime(timeRemaining)}</span>
             </div>
           )}
+
+          <ThemeToggle />
         </div>
       </div>
     </motion.nav>
