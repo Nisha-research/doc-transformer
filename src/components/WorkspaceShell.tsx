@@ -2,18 +2,27 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Copy, Download, Share2, Search, RefreshCw, FileText,
-  Sparkles, Loader2, ChevronLeft, ChevronRight, Check
+  Sparkles, Loader2, ChevronLeft, ChevronRight, Check,
+  Eye, LayoutGrid,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { type OutputMode, getModeById } from '@/lib/output-modes';
 import { type UploadedFile } from '@/lib/file-utils';
 import { DocumentRenderer, TableOfContents, extractToc } from '@/components/DocumentRenderer';
+import { FlashcardsView } from '@/components/views/FlashcardsView';
+import { QuizView } from '@/components/views/QuizView';
+import { TimelineView } from '@/components/views/TimelineView';
+import { MindMapView } from '@/components/views/MindMapView';
+import {
+  exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
+} from '@/lib/exporters';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface WorkspaceShellProps {
   mode: OutputMode;
@@ -26,7 +35,15 @@ interface WorkspaceShellProps {
   onSwitchMode: (modeId: string) => void;
 }
 
-const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'executive-summary'];
+const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'executive-summary', 'timeline'];
+
+const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap'> = {
+  'flashcards': 'flashcards',
+  'active-recall': 'quiz',
+  'exam-prep': 'quiz',
+  'timeline': 'timeline',
+  'mind-map': 'mindmap',
+};
 
 export function WorkspaceShell({
   mode, files, result, isLoading, knowledgeLevel, onBack, onRegenerate, onSwitchMode,
@@ -36,6 +53,9 @@ export function WorkspaceShell({
   const [search, setSearch] = useState('');
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+
+  const interactiveKind = INTERACTIVE_MODES[mode.id];
+  const [view, setView] = useState<'interactive' | 'document'>(interactiveKind ? 'interactive' : 'document');
 
   const toc = useMemo(() => extractToc(result ?? ''), [result]);
   const Icon = mode.icon;
@@ -47,16 +67,21 @@ export function WorkspaceShell({
     toast.success('Copied to clipboard');
   };
 
-  const handleDownload = (kind: 'md' | 'txt') => {
+  type ExportKind = 'md' | 'txt' | 'pdf' | 'docx' | 'pptx';
+  const handleExport = async (kind: ExportKind) => {
     if (!result) return;
-    const blob = new Blob([result], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title.replace(/\s+/g, '-').toLowerCase()}.${kind}`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Downloaded as .${kind}`);
+    try {
+      const t = title;
+      if (kind === 'md') exportMarkdown(result, t);
+      else if (kind === 'txt') exportTxt(result, t);
+      else if (kind === 'pdf') exportPdf(result, t);
+      else if (kind === 'docx') await exportDocx(result, t);
+      else if (kind === 'pptx') await exportPptx(result, t);
+      toast.success(`Exported as .${kind}`);
+    } catch (e) {
+      console.error(e);
+      toast.error(`Export failed`);
+    }
   };
 
   const handleShare = async () => {
@@ -73,12 +98,7 @@ export function WorkspaceShell({
         <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back">
           <ArrowLeft className="w-4 h-4" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setLeftOpen(v => !v)}
-          aria-label="Toggle sources"
-        >
+        <Button variant="ghost" size="icon" onClick={() => setLeftOpen(v => !v)} aria-label="Toggle sources">
           <ChevronLeft className={`w-4 h-4 transition-transform ${!leftOpen ? 'rotate-180' : ''}`} />
         </Button>
 
@@ -86,19 +106,14 @@ export function WorkspaceShell({
           <Icon className="w-4 h-4 text-accent shrink-0" />
           {editingTitle ? (
             <Input
-              autoFocus
-              value={title}
+              autoFocus value={title}
               onChange={e => setTitle(e.target.value)}
               onBlur={() => setEditingTitle(false)}
               onKeyDown={e => { if (e.key === 'Enter') setEditingTitle(false); }}
               className="h-8 max-w-md"
             />
           ) : (
-            <button
-              onClick={() => setEditingTitle(true)}
-              className="font-display font-semibold text-sm truncate hover:text-accent transition-colors"
-              title="Click to rename"
-            >
+            <button onClick={() => setEditingTitle(true)} className="font-display font-semibold text-sm truncate hover:text-accent transition-colors" title="Click to rename">
               {title}
             </button>
           )}
@@ -107,14 +122,26 @@ export function WorkspaceShell({
           </span>
         </div>
 
+        {interactiveKind && result && (
+          <div className="hidden sm:inline-flex items-center rounded-md border border-border p-0.5 mr-1">
+            <button
+              onClick={() => setView('interactive')}
+              className={cn('px-2 py-1 text-xs rounded gap-1 inline-flex items-center', view === 'interactive' ? 'bg-accent/15 text-accent' : 'text-muted-foreground')}
+            >
+              <LayoutGrid className="w-3 h-3" /> Interactive
+            </button>
+            <button
+              onClick={() => setView('document')}
+              className={cn('px-2 py-1 text-xs rounded gap-1 inline-flex items-center', view === 'document' ? 'bg-accent/15 text-accent' : 'text-muted-foreground')}
+            >
+              <Eye className="w-3 h-3" /> Document
+            </button>
+          </div>
+        )}
+
         <div className="hidden md:flex relative max-w-xs flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search workspace…"
-            className="h-8 pl-8 text-sm"
-          />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search workspace…" className="h-8 pl-8 text-sm" />
         </div>
 
         <Button variant="ghost" size="sm" onClick={handleCopy} disabled={!result} className="gap-1.5">
@@ -124,13 +151,16 @@ export function WorkspaceShell({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" disabled={!result} className="gap-1.5">
-              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
+              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleDownload('md')}>Markdown (.md)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleDownload('txt')}>Plain Text (.txt)</DropdownMenuItem>
-            <DropdownMenuItem disabled>PDF, DOCX, PPTX (coming soon)</DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF document (.pdf)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport('docx')}>Word document (.docx)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport('pptx')}>PowerPoint deck (.pptx)</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleExport('md')}>Markdown (.md)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleExport('txt')}>Plain text (.txt)</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -138,12 +168,7 @@ export function WorkspaceShell({
           <Share2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Share</span>
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setRightOpen(v => !v)}
-          aria-label="Toggle actions"
-        >
+        <Button variant="ghost" size="icon" onClick={() => setRightOpen(v => !v)} aria-label="Toggle actions">
           <ChevronRight className={`w-4 h-4 transition-transform ${!rightOpen ? 'rotate-180' : ''}`} />
         </Button>
       </div>
@@ -165,6 +190,8 @@ export function WorkspaceShell({
             result={result}
             mode={mode}
             toc={toc}
+            view={view}
+            interactiveKind={interactiveKind}
           />
         </ResizablePanel>
 
@@ -178,7 +205,7 @@ export function WorkspaceShell({
                 onSwitchMode={onSwitchMode}
                 related={related}
                 onCopy={handleCopy}
-                onDownload={handleDownload}
+                onExport={handleExport}
                 disabled={!result || isLoading}
               />
             </ResizablePanel>
@@ -196,11 +223,7 @@ function LeftSidebar({ files }: { files: UploadedFile[] }) {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Sources</p>
         <ul className="space-y-1.5">
           {files.map(f => (
-            <li
-              key={f.id}
-              className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm"
-              title={f.file.name}
-            >
+            <li key={f.id} className="flex items-start gap-2 p-2 rounded-lg hover:bg-muted/50 transition-colors text-sm" title={f.file.name}>
               <FileText className="w-4 h-4 text-accent mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-foreground">{f.tag}</p>
@@ -219,20 +242,40 @@ function LeftSidebar({ files }: { files: UploadedFile[] }) {
 }
 
 function CenterPanel({
-  isLoading, result, mode, toc,
-}: { isLoading: boolean; result: string | null; mode: OutputMode; toc: ReturnType<typeof extractToc> }) {
+  isLoading, result, mode, toc, view, interactiveKind,
+}: {
+  isLoading: boolean;
+  result: string | null;
+  mode: OutputMode;
+  toc: ReturnType<typeof extractToc>;
+  view: 'interactive' | 'document';
+  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap';
+}) {
+  const showInteractive = view === 'interactive' && interactiveKind && result && !isLoading;
+  const showToc = view === 'document' && !interactiveKind && toc.length > 0;
+
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1100px] px-6 lg:px-10 py-10 grid grid-cols-1 xl:grid-cols-[1fr_220px] gap-10">
+      <div className={cn(
+        'mx-auto px-6 lg:px-10 py-10 gap-10',
+        showToc ? 'max-w-[1100px] grid grid-cols-1 xl:grid-cols-[1fr_220px]' : 'max-w-[950px]'
+      )}>
         <div className="min-w-0">
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="max-w-[850px] mx-auto">
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(!showInteractive && 'max-w-[850px] mx-auto')}>
             {isLoading && !result ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
                 <p className="text-sm text-muted-foreground">Generating {mode.label.toLowerCase()}…</p>
               </div>
             ) : result ? (
-              <DocumentRenderer content={result} isStreaming={isLoading} />
+              showInteractive ? (
+                interactiveKind === 'flashcards' ? <FlashcardsView content={result} /> :
+                interactiveKind === 'quiz' ? <QuizView content={result} /> :
+                interactiveKind === 'timeline' ? <TimelineView content={result} /> :
+                interactiveKind === 'mindmap' ? <MindMapView content={result} /> : null
+              ) : (
+                <DocumentRenderer content={result} isStreaming={isLoading} />
+              )
             ) : (
               <div className="flex items-center justify-center py-32 text-muted-foreground text-sm">
                 Something went wrong. Please try again.
@@ -240,25 +283,27 @@ function CenterPanel({
             )}
           </motion.div>
         </div>
-        <aside className="hidden xl:block">
-          <div className="sticky top-6">
-            <TableOfContents items={toc} />
-          </div>
-        </aside>
+        {showToc && (
+          <aside className="hidden xl:block">
+            <div className="sticky top-6">
+              <TableOfContents items={toc} />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );
 }
 
 function RightSidebar({
-  mode, onRegenerate, onSwitchMode, related, onCopy, onDownload, disabled,
+  mode, onRegenerate, onSwitchMode, related, onCopy, onExport, disabled,
 }: {
   mode: OutputMode;
   onRegenerate: () => void;
   onSwitchMode: (id: string) => void;
   related: OutputMode[];
   onCopy: () => void;
-  onDownload: (k: 'md' | 'txt') => void;
+  onExport: (k: 'md' | 'txt' | 'pdf' | 'docx' | 'pptx') => void;
   disabled: boolean;
 }) {
   return (
@@ -276,19 +321,22 @@ function RightSidebar({
       </div>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Export</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Export Center</p>
         <div className="grid grid-cols-2 gap-1.5">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onDownload('md')} disabled={disabled}>
-            <Download className="w-3.5 h-3.5" /> MD
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onDownload('txt')} disabled={disabled}>
-            <Download className="w-3.5 h-3.5" /> TXT
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 opacity-50" disabled title="Coming soon">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onExport('pdf')} disabled={disabled}>
             <Download className="w-3.5 h-3.5" /> PDF
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 opacity-50" disabled title="Coming soon">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onExport('docx')} disabled={disabled}>
             <Download className="w-3.5 h-3.5" /> DOCX
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onExport('pptx')} disabled={disabled}>
+            <Download className="w-3.5 h-3.5" /> PPTX
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onExport('md')} disabled={disabled}>
+            <Download className="w-3.5 h-3.5" /> MD
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 col-span-2" onClick={() => onExport('txt')} disabled={disabled}>
+            <Download className="w-3.5 h-3.5" /> Plain text (.txt)
           </Button>
         </div>
       </div>
