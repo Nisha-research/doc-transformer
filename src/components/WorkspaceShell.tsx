@@ -130,7 +130,7 @@ export function WorkspaceShell({
           </span>
         </div>
 
-        {interactiveKind && result && (
+        {interactiveKind && !isVisualOnly && result && (
           <div className="hidden sm:inline-flex items-center rounded-md border border-border p-0.5 mr-1">
             <button
               onClick={() => setView('interactive')}
