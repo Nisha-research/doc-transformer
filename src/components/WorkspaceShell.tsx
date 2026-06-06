@@ -206,6 +206,9 @@ export function WorkspaceShell({
             toc={toc}
             view={view}
             interactiveKind={interactiveKind}
+            files={files}
+            knowledgeLevel={knowledgeLevel}
+            generationKey={generationKey}
           />
         </ResizablePanel>
 
