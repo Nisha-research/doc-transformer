@@ -128,6 +128,7 @@ const Index = () => {
             result={result}
             isLoading={isLoading}
             knowledgeLevel={knowledgeLevel}
+            generationKey={generationKey}
             onBack={handleBackToModes}
             onRegenerate={handleRegenerate}
             onSwitchMode={handleSwitchMode}
