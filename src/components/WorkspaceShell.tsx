@@ -259,40 +259,44 @@ function LeftSidebar({ files }: { files: UploadedFile[] }) {
 }
 
 function CenterPanel({
-  isLoading, result, mode, toc, view, interactiveKind,
+  isLoading, result, mode, toc, view, interactiveKind, files, knowledgeLevel, generationKey,
 }: {
   isLoading: boolean;
   result: string | null;
   mode: OutputMode;
   toc: ReturnType<typeof extractToc>;
   view: 'interactive' | 'document';
-  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap';
+  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic';
+  files: UploadedFile[];
+  knowledgeLevel: number;
+  generationKey: number;
 }) {
-  const showInteractive = view === 'interactive' && interactiveKind && result && !isLoading;
+  const isVisualKind = interactiveKind === 'comic' || interactiveKind === 'infographic';
+  const showInteractive = view === 'interactive' && interactiveKind && (isVisualKind || (result && !isLoading));
   const showToc = view === 'document' && !interactiveKind && toc.length > 0;
 
   return (
     <div className="h-full overflow-y-auto">
       <div className={cn(
         'mx-auto px-6 lg:px-10 py-10 gap-10',
-        showToc ? 'max-w-[1100px] grid grid-cols-1 xl:grid-cols-[1fr_220px]' : 'max-w-[950px]'
+        showToc ? 'max-w-[1100px] grid grid-cols-1 xl:grid-cols-[1fr_220px]' : 'max-w-[1100px]'
       )}>
         <div className="min-w-0">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(!showInteractive && 'max-w-[850px] mx-auto')}>
-            {isLoading && !result ? (
+            {showInteractive ? (
+              interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+              interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+              interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
+              interactiveKind === 'quiz' ? <QuizView content={result!} /> :
+              interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
+              interactiveKind === 'mindmap' ? <MindMapView content={result!} /> : null
+            ) : isLoading && !result ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
                 <p className="text-sm text-muted-foreground">Generating {mode.label.toLowerCase()}…</p>
               </div>
             ) : result ? (
-              showInteractive ? (
-                interactiveKind === 'flashcards' ? <FlashcardsView content={result} /> :
-                interactiveKind === 'quiz' ? <QuizView content={result} /> :
-                interactiveKind === 'timeline' ? <TimelineView content={result} /> :
-                interactiveKind === 'mindmap' ? <MindMapView content={result} /> : null
-              ) : (
-                <DocumentRenderer content={result} isStreaming={isLoading} />
-              )
+              <DocumentRenderer content={result} isStreaming={isLoading} />
             ) : (
               <div className="flex items-center justify-center py-32 text-muted-foreground text-sm">
                 Something went wrong. Please try again.
