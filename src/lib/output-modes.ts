@@ -85,6 +85,7 @@ export const categories: Category[] = [
     description: 'Understand anything in plain language',
     gradient: 'bg-gradient-general',
     modes: [
+      M('infographic', 'Visual Infographic Card', 'Designed PDF/PNG/HTML with stats & sections', BarChart3, 'general'),
       M('executive-summary-general', 'Executive Summary', 'Plain-language TL;DR', FileText, 'general'),
       M('faq', 'FAQ Generator', 'Top 10 questions answered', HelpCircle, 'general'),
       M('book-summary', 'Book Summary', 'Chapter-by-chapter distillation', BookMarked, 'general'),

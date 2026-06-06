@@ -18,6 +18,8 @@ import { FlashcardsView } from '@/components/views/FlashcardsView';
 import { QuizView } from '@/components/views/QuizView';
 import { TimelineView } from '@/components/views/TimelineView';
 import { MindMapView } from '@/components/views/MindMapView';
+import { ComicStripView } from '@/components/views/ComicStripView';
+import { InfographicView } from '@/components/views/InfographicView';
 import {
   exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
 } from '@/lib/exporters';
@@ -30,23 +32,28 @@ interface WorkspaceShellProps {
   result: string | null;
   isLoading: boolean;
   knowledgeLevel: number;
+  generationKey: number;
   onBack: () => void;
   onRegenerate: () => void;
   onSwitchMode: (modeId: string) => void;
 }
 
-const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'executive-summary', 'timeline'];
+const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'infographic', 'comic-strip', 'executive-summary', 'timeline'];
 
-const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap'> = {
+const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic'> = {
   'flashcards': 'flashcards',
   'active-recall': 'quiz',
   'exam-prep': 'quiz',
   'timeline': 'timeline',
   'mind-map': 'mindmap',
+  'comic-strip': 'comic',
+  'infographic': 'infographic',
 };
 
+const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic']);
+
 export function WorkspaceShell({
-  mode, files, result, isLoading, knowledgeLevel, onBack, onRegenerate, onSwitchMode,
+  mode, files, result, isLoading, knowledgeLevel, generationKey, onBack, onRegenerate, onSwitchMode,
 }: WorkspaceShellProps) {
   const [title, setTitle] = useState(`${mode.label} – Workspace`);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -55,6 +62,7 @@ export function WorkspaceShell({
   const [rightOpen, setRightOpen] = useState(true);
 
   const interactiveKind = INTERACTIVE_MODES[mode.id];
+  const isVisualOnly = VISUAL_ONLY_MODES.has(mode.id);
   const [view, setView] = useState<'interactive' | 'document'>(interactiveKind ? 'interactive' : 'document');
 
   const toc = useMemo(() => extractToc(result ?? ''), [result]);
@@ -122,7 +130,7 @@ export function WorkspaceShell({
           </span>
         </div>
 
-        {interactiveKind && result && (
+        {interactiveKind && !isVisualOnly && result && (
           <div className="hidden sm:inline-flex items-center rounded-md border border-border p-0.5 mr-1">
             <button
               onClick={() => setView('interactive')}
@@ -148,21 +156,27 @@ export function WorkspaceShell({
           <Copy className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Copy</span>
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={!result} className="gap-1.5">
-              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF document (.pdf)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('docx')}>Word document (.docx)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('pptx')}>PowerPoint deck (.pptx)</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => handleExport('md')}>Markdown (.md)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('txt')}>Plain text (.txt)</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button variant="ghost" size="sm" onClick={handleCopy} disabled={!result || isVisualOnly} className="gap-1.5">
+          <Copy className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Copy</span>
+        </Button>
+
+        {!isVisualOnly && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={!result} className="gap-1.5">
+                <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF document (.pdf)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('docx')}>Word document (.docx)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('pptx')}>PowerPoint deck (.pptx)</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleExport('md')}>Markdown (.md)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('txt')}>Plain text (.txt)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <Button variant="ghost" size="sm" onClick={handleShare} className="gap-1.5">
           <Share2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Share</span>
@@ -192,6 +206,9 @@ export function WorkspaceShell({
             toc={toc}
             view={view}
             interactiveKind={interactiveKind}
+            files={files}
+            knowledgeLevel={knowledgeLevel}
+            generationKey={generationKey}
           />
         </ResizablePanel>
 
@@ -242,40 +259,44 @@ function LeftSidebar({ files }: { files: UploadedFile[] }) {
 }
 
 function CenterPanel({
-  isLoading, result, mode, toc, view, interactiveKind,
+  isLoading, result, mode, toc, view, interactiveKind, files, knowledgeLevel, generationKey,
 }: {
   isLoading: boolean;
   result: string | null;
   mode: OutputMode;
   toc: ReturnType<typeof extractToc>;
   view: 'interactive' | 'document';
-  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap';
+  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic';
+  files: UploadedFile[];
+  knowledgeLevel: number;
+  generationKey: number;
 }) {
-  const showInteractive = view === 'interactive' && interactiveKind && result && !isLoading;
+  const isVisualKind = interactiveKind === 'comic' || interactiveKind === 'infographic';
+  const showInteractive = view === 'interactive' && interactiveKind && (isVisualKind || (result && !isLoading));
   const showToc = view === 'document' && !interactiveKind && toc.length > 0;
 
   return (
     <div className="h-full overflow-y-auto">
       <div className={cn(
         'mx-auto px-6 lg:px-10 py-10 gap-10',
-        showToc ? 'max-w-[1100px] grid grid-cols-1 xl:grid-cols-[1fr_220px]' : 'max-w-[950px]'
+        showToc ? 'max-w-[1100px] grid grid-cols-1 xl:grid-cols-[1fr_220px]' : 'max-w-[1100px]'
       )}>
         <div className="min-w-0">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(!showInteractive && 'max-w-[850px] mx-auto')}>
-            {isLoading && !result ? (
+            {showInteractive ? (
+              interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+              interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+              interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
+              interactiveKind === 'quiz' ? <QuizView content={result!} /> :
+              interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
+              interactiveKind === 'mindmap' ? <MindMapView content={result!} /> : null
+            ) : isLoading && !result ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
                 <p className="text-sm text-muted-foreground">Generating {mode.label.toLowerCase()}…</p>
               </div>
             ) : result ? (
-              showInteractive ? (
-                interactiveKind === 'flashcards' ? <FlashcardsView content={result} /> :
-                interactiveKind === 'quiz' ? <QuizView content={result} /> :
-                interactiveKind === 'timeline' ? <TimelineView content={result} /> :
-                interactiveKind === 'mindmap' ? <MindMapView content={result} /> : null
-              ) : (
-                <DocumentRenderer content={result} isStreaming={isLoading} />
-              )
+              <DocumentRenderer content={result} isStreaming={isLoading} />
             ) : (
               <div className="flex items-center justify-center py-32 text-muted-foreground text-sm">
                 Something went wrong. Please try again.
