@@ -13,6 +13,8 @@ import { toast } from 'sonner';
 
 type AppStep = 'upload' | 'select-mode' | 'results';
 
+const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic']);
+
 const Index = () => {
   const [step, setStep] = useState<AppStep>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -20,6 +22,7 @@ const Index = () => {
   const [knowledgeLevel, setKnowledgeLevel] = useState(50);
   const [result, setResult] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [generationKey, setGenerationKey] = useState(0);
 
   const handleFilesReady = (files: UploadedFile[]) => {
     setUploadedFiles(files);
@@ -27,6 +30,13 @@ const Index = () => {
   };
 
   const runGeneration = useCallback(async (mode: OutputMode, level: number, files: UploadedFile[]) => {
+    // Visual modes self-generate inside their view components, keyed by generationKey.
+    if (VISUAL_ONLY_MODES.has(mode.id)) {
+      setResult(null);
+      setIsLoading(false);
+      setGenerationKey(k => k + 1);
+      return;
+    }
     setIsLoading(true);
     setResult('');
     try {
