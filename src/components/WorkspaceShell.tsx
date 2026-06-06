@@ -18,6 +18,8 @@ import { FlashcardsView } from '@/components/views/FlashcardsView';
 import { QuizView } from '@/components/views/QuizView';
 import { TimelineView } from '@/components/views/TimelineView';
 import { MindMapView } from '@/components/views/MindMapView';
+import { ComicStripView } from '@/components/views/ComicStripView';
+import { InfographicView } from '@/components/views/InfographicView';
 import {
   exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
 } from '@/lib/exporters';
@@ -30,20 +32,25 @@ interface WorkspaceShellProps {
   result: string | null;
   isLoading: boolean;
   knowledgeLevel: number;
+  generationKey: number;
   onBack: () => void;
   onRegenerate: () => void;
   onSwitchMode: (modeId: string) => void;
 }
 
-const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'executive-summary', 'timeline'];
+const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'infographic', 'comic-strip', 'executive-summary', 'timeline'];
 
-const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap'> = {
+const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic'> = {
   'flashcards': 'flashcards',
   'active-recall': 'quiz',
   'exam-prep': 'quiz',
   'timeline': 'timeline',
   'mind-map': 'mindmap',
+  'comic-strip': 'comic',
+  'infographic': 'infographic',
 };
+
+const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic']);
 
 export function WorkspaceShell({
   mode, files, result, isLoading, knowledgeLevel, onBack, onRegenerate, onSwitchMode,
