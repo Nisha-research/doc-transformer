@@ -53,7 +53,7 @@ const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mi
 const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic']);
 
 export function WorkspaceShell({
-  mode, files, result, isLoading, knowledgeLevel, onBack, onRegenerate, onSwitchMode,
+  mode, files, result, isLoading, knowledgeLevel, generationKey, onBack, onRegenerate, onSwitchMode,
 }: WorkspaceShellProps) {
   const [title, setTitle] = useState(`${mode.label} – Workspace`);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -62,6 +62,7 @@ export function WorkspaceShell({
   const [rightOpen, setRightOpen] = useState(true);
 
   const interactiveKind = INTERACTIVE_MODES[mode.id];
+  const isVisualOnly = VISUAL_ONLY_MODES.has(mode.id);
   const [view, setView] = useState<'interactive' | 'document'>(interactiveKind ? 'interactive' : 'document');
 
   const toc = useMemo(() => extractToc(result ?? ''), [result]);
