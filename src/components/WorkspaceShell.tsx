@@ -156,21 +156,27 @@ export function WorkspaceShell({
           <Copy className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Copy</span>
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={!result} className="gap-1.5">
-              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF document (.pdf)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('docx')}>Word document (.docx)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('pptx')}>PowerPoint deck (.pptx)</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => handleExport('md')}>Markdown (.md)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExport('txt')}>Plain text (.txt)</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button variant="ghost" size="sm" onClick={handleCopy} disabled={!result || isVisualOnly} className="gap-1.5">
+          <Copy className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Copy</span>
+        </Button>
+
+        {!isVisualOnly && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={!result} className="gap-1.5">
+                <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF document (.pdf)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('docx')}>Word document (.docx)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('pptx')}>PowerPoint deck (.pptx)</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleExport('md')}>Markdown (.md)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('txt')}>Plain text (.txt)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         <Button variant="ghost" size="sm" onClick={handleShare} className="gap-1.5">
           <Share2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Share</span>
