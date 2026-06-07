@@ -78,7 +78,12 @@ ${c.panels.map((p, i) => `
 
 // ---------- Infographic HTML ----------
 export function exportInfographicAsHtml(g: InfographicResult) {
-  const p = g.palette;
+  const p = {
+    primary: safeHex(g.palette?.primary, '#2563eb'),
+    secondary: safeHex(g.palette?.secondary, '#0ea5e9'),
+    accent: safeHex(g.palette?.accent, '#f59e0b'),
+    bg: safeHex(g.palette?.bg, '#f8fafc'),
+  };
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
 <title>${escapeHtml(g.title)}</title>
