@@ -181,7 +181,7 @@ Pick a palette intentionally — finance=deep blues+gold, biology=greens+coral, 
     });
   } catch (e) {
     console.error("generate-visual error", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Visual generation failed. Please try again." }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
