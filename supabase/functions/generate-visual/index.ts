@@ -83,8 +83,31 @@ async function generateComicImage(scene: string, style: string, key: string): Pr
   }
 }
 
+function isAllowedOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".lovable.app") ||
+      host.endsWith(".lovable.dev") ||
+      host.endsWith(".lovableproject.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  if (!isAllowedOrigin(req)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const { kind, documentText, knowledgeLevel, fileTags } = await req.json();
@@ -158,7 +181,7 @@ Pick a palette intentionally — finance=deep blues+gold, biology=greens+coral, 
     });
   } catch (e) {
     console.error("generate-visual error", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Visual generation failed. Please try again." }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

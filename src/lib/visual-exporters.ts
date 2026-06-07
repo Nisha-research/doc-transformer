@@ -62,7 +62,7 @@ export function exportComicAsHtml(c: ComicResult) {
 ${c.panels.map((p, i) => `
   <div class="panel">
     <div class="img">
-      ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.title)}"/>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999">(image unavailable)</div>'}
+      ${p.image && isSafeImageUrl(p.image) ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}"/>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999">(image unavailable)</div>'}
       ${p.dialogue ? `<div class="bubble">${escapeHtml(p.dialogue)}</div>` : ''}
     </div>
     <div class="meta">
@@ -78,7 +78,12 @@ ${c.panels.map((p, i) => `
 
 // ---------- Infographic HTML ----------
 export function exportInfographicAsHtml(g: InfographicResult) {
-  const p = g.palette;
+  const p = {
+    primary: safeHex(g.palette?.primary, '#2563eb'),
+    secondary: safeHex(g.palette?.secondary, '#0ea5e9'),
+    accent: safeHex(g.palette?.accent, '#f59e0b'),
+    bg: safeHex(g.palette?.bg, '#f8fafc'),
+  };
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
 <title>${escapeHtml(g.title)}</title>
@@ -123,4 +128,14 @@ function escapeHtml(s: string) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function isSafeImageUrl(u: string): boolean {
+  if (typeof u !== 'string') return false;
+  // Allow http(s) and data:image/* URLs only
+  return /^https?:\/\//i.test(u) || /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(u);
+}
+
+function safeHex(c: string, fallback: string): string {
+  return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : fallback;
 }

@@ -110,9 +110,32 @@ function getKnowledgeLevelInstruction(level: number): string {
   return "READER LEVEL: EXPERT. Use precise technical language, assume deep domain knowledge, and focus on nuanced insights, edge cases, and advanced implications.";
 }
 
+function isAllowedOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname;
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".lovable.app") ||
+      host.endsWith(".lovable.dev") ||
+      host.endsWith(".lovableproject.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!isAllowedOrigin(req)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -187,7 +210,7 @@ serve(async (req) => {
   } catch (e) {
     console.error("process-document error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({ error: "AI processing failed. Please try again." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
