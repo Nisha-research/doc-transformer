@@ -20,6 +20,7 @@ import { TimelineView } from '@/components/views/TimelineView';
 import { MindMapView } from '@/components/views/MindMapView';
 import { ComicStripView } from '@/components/views/ComicStripView';
 import { InfographicView } from '@/components/views/InfographicView';
+import { SlideDeckView } from '@/components/views/SlideDeckView';
 import {
   exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
 } from '@/lib/exporters';
