@@ -124,3 +124,13 @@ function escapeHtml(s: string) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+function isSafeImageUrl(u: string): boolean {
+  if (typeof u !== 'string') return false;
+  // Allow http(s) and data:image/* URLs only
+  return /^https?:\/\//i.test(u) || /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(u);
+}
+
+function safeHex(c: string, fallback: string): string {
+  return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : fallback;
+}
