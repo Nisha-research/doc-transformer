@@ -62,7 +62,7 @@ export function exportComicAsHtml(c: ComicResult) {
 ${c.panels.map((p, i) => `
   <div class="panel">
     <div class="img">
-      ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.title)}"/>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999">(image unavailable)</div>'}
+      ${p.image && isSafeImageUrl(p.image) ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.title)}"/>` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999">(image unavailable)</div>'}
       ${p.dialogue ? `<div class="bubble">${escapeHtml(p.dialogue)}</div>` : ''}
     </div>
     <div class="meta">
