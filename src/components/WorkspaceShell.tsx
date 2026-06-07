@@ -20,6 +20,7 @@ import { TimelineView } from '@/components/views/TimelineView';
 import { MindMapView } from '@/components/views/MindMapView';
 import { ComicStripView } from '@/components/views/ComicStripView';
 import { InfographicView } from '@/components/views/InfographicView';
+import { SlideDeckView } from '@/components/views/SlideDeckView';
 import {
   exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
 } from '@/lib/exporters';
@@ -40,7 +41,7 @@ interface WorkspaceShellProps {
 
 const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'infographic', 'comic-strip', 'executive-summary', 'timeline'];
 
-const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic'> = {
+const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic' | 'slides'> = {
   'flashcards': 'flashcards',
   'active-recall': 'quiz',
   'exam-prep': 'quiz',
@@ -48,9 +49,10 @@ const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mi
   'mind-map': 'mindmap',
   'comic-strip': 'comic',
   'infographic': 'infographic',
+  'slide-deck': 'slides',
 };
 
-const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic']);
+const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic', 'slide-deck']);
 
 export function WorkspaceShell({
   mode, files, result, isLoading, knowledgeLevel, generationKey, onBack, onRegenerate, onSwitchMode,
@@ -266,12 +268,12 @@ function CenterPanel({
   mode: OutputMode;
   toc: ReturnType<typeof extractToc>;
   view: 'interactive' | 'document';
-  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic';
+  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic' | 'slides';
   files: UploadedFile[];
   knowledgeLevel: number;
   generationKey: number;
 }) {
-  const isVisualKind = interactiveKind === 'comic' || interactiveKind === 'infographic';
+  const isVisualKind = interactiveKind === 'comic' || interactiveKind === 'infographic' || interactiveKind === 'slides';
   const showInteractive = view === 'interactive' && interactiveKind && (isVisualKind || (result && !isLoading));
   const showToc = view === 'document' && !interactiveKind && toc.length > 0;
 
@@ -286,6 +288,7 @@ function CenterPanel({
             {showInteractive ? (
               interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
               interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+              interactiveKind === 'slides' ? <SlideDeckView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
               interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
               interactiveKind === 'quiz' ? <QuizView content={result!} /> :
               interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
