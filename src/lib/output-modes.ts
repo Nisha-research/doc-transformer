@@ -35,6 +35,7 @@ export const categories: Category[] = [
     gradient: 'bg-gradient-student',
     modes: [
       M('smart-notes', 'Structured Study Notes', 'Headings, bullets, callouts & key concepts', BookOpen, 'academic'),
+      M('slide-deck', 'AI Slide Deck (.pptx)', 'Designed slides with previews, reorder & export', Presentation, 'academic'),
       M('comic-strip', 'Story Comic Strip Panels', 'Narrative panels that explain the concept', ImageIcon, 'academic'),
       M('mind-map', 'Interactive Concept Mind Map', 'Branching map of ideas & relationships', Network, 'academic'),
       M('timeline', 'Chronological Factual Timeline', 'Events & milestones in order', Clock, 'academic'),
