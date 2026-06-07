@@ -268,12 +268,12 @@ function CenterPanel({
   mode: OutputMode;
   toc: ReturnType<typeof extractToc>;
   view: 'interactive' | 'document';
-  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic';
+  interactiveKind?: 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic' | 'slides';
   files: UploadedFile[];
   knowledgeLevel: number;
   generationKey: number;
 }) {
-  const isVisualKind = interactiveKind === 'comic' || interactiveKind === 'infographic';
+  const isVisualKind = interactiveKind === 'comic' || interactiveKind === 'infographic' || interactiveKind === 'slides';
   const showInteractive = view === 'interactive' && interactiveKind && (isVisualKind || (result && !isLoading));
   const showToc = view === 'document' && !interactiveKind && toc.length > 0;
 
@@ -288,6 +288,7 @@ function CenterPanel({
             {showInteractive ? (
               interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
               interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+              interactiveKind === 'slides' ? <SlideDeckView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
               interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
               interactiveKind === 'quiz' ? <QuizView content={result!} /> :
               interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
