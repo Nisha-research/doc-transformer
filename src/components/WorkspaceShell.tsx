@@ -41,7 +41,7 @@ interface WorkspaceShellProps {
 
 const RELATED_MODES = ['flashcards', 'active-recall', 'cheat-sheet', 'mind-map', 'infographic', 'comic-strip', 'executive-summary', 'timeline'];
 
-const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic'> = {
+const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mindmap' | 'comic' | 'infographic' | 'slides'> = {
   'flashcards': 'flashcards',
   'active-recall': 'quiz',
   'exam-prep': 'quiz',
@@ -49,9 +49,10 @@ const INTERACTIVE_MODES: Record<string, 'flashcards' | 'quiz' | 'timeline' | 'mi
   'mind-map': 'mindmap',
   'comic-strip': 'comic',
   'infographic': 'infographic',
+  'slide-deck': 'slides',
 };
 
-const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic']);
+const VISUAL_ONLY_MODES = new Set(['comic-strip', 'infographic', 'slide-deck']);
 
 export function WorkspaceShell({
   mode, files, result, isLoading, knowledgeLevel, generationKey, onBack, onRegenerate, onSwitchMode,
