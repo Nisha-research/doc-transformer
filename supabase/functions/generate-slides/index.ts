@@ -20,23 +20,35 @@ function extractJson<T>(text: string): T {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (!isAllowedOrigin(req)) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: jsonHeaders });
   }
+  const auth = await requireUser(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.userId;
+  const started = Date.now();
 
   try {
     const { documentText, knowledgeLevel, fileTags, slideCount } = await req.json();
-    const key = Deno.env.get("LOVABLE_API_KEY");
-    if (!key) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+    const rl = await checkRateLimit(userId, "slides_gen", 10, 3600);
+    if (rl) {
+      await logUsage({ userId, mode: "slide-deck", kind: "slides", status: "rate_limited" });
+      return rl;
     }
+
+    const key = Deno.env.get("LOVABLE_API_KEY");
+    if (!key) return new Response(JSON.stringify({ error: "AI not configured" }), { status: 500, headers: jsonHeaders });
 
     const level = knowledgeLevel < 33 ? "beginner" : knowledgeLevel < 66 ? "intermediate" : "expert";
     const count = Math.min(Math.max(Number(slideCount) || 10, 6), 18);
     const docSlice = String(documentText || "").slice(0, 60000);
+
+    const cacheKey = await sha256(`slides:${level}:${count}:${docSlice}`);
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      await logUsage({ userId, mode: "slide-deck", kind: "slides", cacheHit: true, ms: Date.now() - started });
+      return new Response(JSON.stringify(cached), { headers: jsonHeaders });
+    }
 
     const sys = `You are a senior presentation designer. Read the source document and produce a polished ${count}-slide deck that teaches the core ideas. Return STRICT JSON only — no prose, no markdown fences.
 
@@ -45,32 +57,31 @@ Schema:
   "title": "Deck title (max 9 words)",
   "subtitle": "One supporting line",
   "theme": {
-    "primary": "#hex (dominant brand color matching topic mood)",
-    "accent":  "#hex (sharp contrast accent)",
-    "bg":      "#hex (light slide background)",
-    "ink":     "#hex (body text color)"
+    "primary": "#hex",
+    "accent":  "#hex",
+    "bg":      "#hex",
+    "ink":     "#hex"
   },
   "slides": [
     {
       "layout": "title" | "section" | "bullets" | "two-column" | "stat" | "quote" | "conclusion",
       "title": "Slide title",
       "subtitle": "Optional subtitle/eyebrow",
-      "bullets": ["short point", "..."],          // for bullets / two-column / conclusion
-      "columns": [{ "heading": "...", "body": "..." }, { "heading": "...", "body": "..." }],  // for two-column
-      "stat":   { "value": "73%", "label": "what it measures", "context": "1-line explainer" }, // for stat
-      "quote":  { "text": "...", "author": "..." },  // for quote
-      "notes":  "Speaker notes — 2-3 sentences for the presenter"
+      "bullets": ["short point"],
+      "columns": [{ "heading": "...", "body": "..." }],
+      "stat":   { "value": "73%", "label": "what it measures", "context": "1-line" },
+      "quote":  { "text": "...", "author": "..." },
+      "notes":  "Speaker notes"
     }
   ]
 }
 
 Rules:
-- Slide 1 MUST be layout="title" (deck title + subtitle).
-- Include at least one "section" divider and one "stat" or "quote" slide if the source supports it.
-- Last slide MUST be layout="conclusion" with key takeaways as bullets.
-- Bullets: max 6 per slide, each ≤ 14 words. No nested bullets.
-- Always include "notes" for every slide.
-- Pick a theme palette that matches the topic mood (finance=navy+gold, biology=greens, tech=violets+cyan, history=warm sepias, etc).
+- Slide 1 MUST be layout="title".
+- Include at least one "section" divider and one "stat" or "quote" slide if possible.
+- Last slide MUST be layout="conclusion".
+- Bullets: max 6 per slide, each ≤ 14 words.
+- Always include "notes".
 - Reader level: ${level}.
 
 Source documents: ${(fileTags || []).join(", ")}
@@ -91,21 +102,21 @@ ${docSlice}`;
     });
     if (!r.ok) {
       console.error("AI gateway error", r.status, await r.text());
-      return new Response(JSON.stringify({ error: "AI processing failed. Please try again." }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      await logUsage({ userId, mode: "slide-deck", kind: "slides", status: "error", ms: Date.now() - started });
+      return new Response(JSON.stringify({ error: "AI processing failed. Please try again." }),
+        { status: 500, headers: jsonHeaders });
     }
     const j = await r.json();
     const raw = j.choices?.[0]?.message?.content ?? "";
     const spec = extractJson<any>(raw);
 
-    return new Response(JSON.stringify(spec), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await cachePut(cacheKey, "slide-deck", spec);
+    await logUsage({ userId, mode: "slide-deck", kind: "slides", ms: Date.now() - started });
+    return new Response(JSON.stringify(spec), { headers: jsonHeaders });
   } catch (e) {
     console.error("generate-slides error", e);
-    return new Response(JSON.stringify({ error: "Slide generation failed. Please try again." }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await logUsage({ userId, mode: "slide-deck", kind: "slides", status: "error", ms: Date.now() - started });
+    return new Response(JSON.stringify({ error: "Slide generation failed. Please try again." }),
+      { status: 500, headers: jsonHeaders });
   }
 });
