@@ -108,69 +108,61 @@ function getKnowledgeLevelInstruction(level: number): string {
   return "READER LEVEL: EXPERT. Use precise technical language, assume deep domain knowledge, and focus on nuanced insights, edge cases, and advanced implications.";
 }
 
-function isAllowedOrigin(req: Request): boolean {
-  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
-  if (!origin) return false;
-  try {
-    const host = new URL(origin).hostname;
-    return (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.endsWith(".lovable.app") ||
-      host.endsWith(".lovable.dev") ||
-      host.endsWith(".lovableproject.com")
-    );
-  } catch {
-    return false;
-  }
-}
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (!isAllowedOrigin(req)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: jsonHeaders });
   }
 
-  if (!isAllowedOrigin(req)) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const auth = await requireUser(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.userId;
+
+  const started = Date.now();
+  let modeIdForLog = "unknown";
 
   try {
     const { documentText, modeId, knowledgeLevel, fileTags } = await req.json();
+    modeIdForLog = modeId || "unknown";
 
     if (!documentText || !modeId) {
-      return new Response(
-        JSON.stringify({ error: "Missing documentText or modeId" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Missing documentText or modeId" }),
+        { status: 400, headers: jsonHeaders });
+    }
+
+    // Rate limit: 30 text generations / hour / user
+    const rl = await checkRateLimit(userId, "text_gen", 30, 3600);
+    if (rl) {
+      await logUsage({ userId, mode: modeId, kind: "text", status: "rate_limited" });
+      return rl;
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "AI service not configured" }),
+        { status: 500, headers: jsonHeaders });
+    }
+
+    // Cache check
+    const cacheKey = await sha256(`text:${modeId}:${knowledgeLevel ?? 50}:${String(documentText).slice(0, 80000)}`);
+    const cached = await cacheGet(cacheKey) as { text: string } | null;
+    if (cached?.text) {
+      await logUsage({ userId, mode: modeId, kind: "text", cacheHit: true, ms: Date.now() - started });
+      // Replay as a single SSE event so the client streaming code works unchanged.
+      const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: cached.text } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(sse, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
     }
 
     const systemBase = SYSTEM_PROMPTS[modeId] ||
       "You are a helpful document assistant. Analyze the provided document and generate a clear, well-structured output.";
     const levelInstruction = getKnowledgeLevelInstruction(knowledgeLevel ?? 50);
-    const fileContext = fileTags?.length
-      ? `\nSource documents: ${fileTags.join(", ")}`
-      : "";
-
+    const fileContext = fileTags?.length ? `\nSource documents: ${fileTags.join(", ")}` : "";
     const systemPrompt = `${systemBase}${RICH_MD_INSTRUCTION}\n\n${levelInstruction}${fileContext}`;
-
     const userMessage = `Here is the document content to process:\n\n---\n${String(documentText).slice(0, 80000)}\n---\n\nGenerate the output now following ALL formatting requirements.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
@@ -182,34 +174,61 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please wait a moment and try again." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const errText = await response.text();
       console.error("AI gateway error:", response.status, errText);
-      return new Response(
-        JSON.stringify({ error: "AI processing failed" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      await logUsage({ userId, mode: modeId, kind: "text", status: "error", ms: Date.now() - started });
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "AI provider rate limit. Try again shortly." }),
+          { status: 429, headers: jsonHeaders });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }),
+          { status: 402, headers: jsonHeaders });
+      }
+      return new Response(JSON.stringify({ error: "AI processing failed" }),
+        { status: 500, headers: jsonHeaders });
     }
 
-    return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-    });
+    // Tee stream: pass through to client + buffer to cache after.
+    const [a, b] = response.body!.tee();
+    (async () => {
+      try {
+        const reader = b.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let full = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let i: number;
+          while ((i = buf.indexOf("\n")) !== -1) {
+            const line = buf.slice(0, i).replace(/\r$/, "");
+            buf = buf.slice(i + 1);
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const j = JSON.parse(payload);
+              const c = j.choices?.[0]?.delta?.content;
+              if (c) full += c;
+            } catch { /* partial */ }
+          }
+        }
+        if (full.length > 200) {
+          await cachePut(cacheKey, modeId, { text: full });
+        }
+        await logUsage({ userId, mode: modeId, kind: "text", ms: Date.now() - started, tokens: Math.ceil(full.length / 4) });
+      } catch (e) {
+        console.error("cache tee error:", e);
+      }
+    })();
+
+    return new Response(a, { headers: { ...corsHeaders, "Content-Type": "text/event-stream" } });
   } catch (e) {
     console.error("process-document error:", e);
-    return new Response(
-      JSON.stringify({ error: "AI processing failed. Please try again." }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    await logUsage({ userId, mode: modeIdForLog, kind: "text", status: "error", ms: Date.now() - started });
+    return new Response(JSON.stringify({ error: "AI processing failed. Please try again." }),
+      { status: 500, headers: jsonHeaders });
   }
 });
