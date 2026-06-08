@@ -1,3 +1,5 @@
+import { authHeader } from "./ai-stream";
+
 const URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-slides`;
 
 export type SlideLayout = 'title' | 'section' | 'bullets' | 'two-column' | 'stat' | 'quote' | 'conclusion';
@@ -35,10 +37,7 @@ export async function generateSlides(params: {
 }): Promise<SlideDeck> {
   const r = await fetch(URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
     body: JSON.stringify(params),
   });
   if (!r.ok) {
