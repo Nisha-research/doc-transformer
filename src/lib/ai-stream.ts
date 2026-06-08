@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 const PROCESS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-document`;
 
 interface StreamDocumentParams {
@@ -8,6 +10,12 @@ interface StreamDocumentParams {
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
+}
+
+async function authHeader(): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? `Bearer ${token}` : `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
 }
 
 export async function streamDocument({
@@ -21,10 +29,7 @@ export async function streamDocument({
 }: StreamDocumentParams) {
   const resp = await fetch(PROCESS_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
+    headers: { "Content-Type": "application/json", Authorization: await authHeader() },
     body: JSON.stringify({ documentText, modeId, knowledgeLevel, fileTags }),
   });
 
@@ -74,7 +79,6 @@ export async function streamDocument({
     }
   }
 
-  // Flush remaining
   if (buffer.trim()) {
     for (let raw of buffer.split("\n")) {
       if (!raw) continue;
@@ -94,11 +98,7 @@ export async function streamDocument({
 }
 
 export async function extractTextFromFile(file: File): Promise<string> {
-  if (file.type === "text/plain") {
-    return await file.text();
-  }
-  // For PDF and PPT, read as text (basic extraction — edge function can enhance later)
-  // For now we read what we can client-side
+  if (file.type === "text/plain") return await file.text();
   return await file.text();
 }
 
@@ -110,3 +110,5 @@ export async function extractTextFromFiles(files: { file: File; tag: string }[])
   }
   return parts.join("\n\n");
 }
+
+export { authHeader };
