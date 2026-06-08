@@ -113,16 +113,17 @@ export async function sha256(text: string): Promise<string> {
 
 export async function cacheGet(key: string): Promise<unknown | null> {
   const sb = admin();
-  const { data } = await sb.from("ai_cache").select("payload").eq("cache_key", key).maybeSingle();
+  const { data } = await sb
+    .from("ai_cache")
+    .select("payload, hits")
+    .eq("cache_key", key)
+    .maybeSingle();
   if (!data) return null;
-  // Fire-and-forget hit increment
+  // Fire-and-forget hit counter
   sb.from("ai_cache")
-    .update({ hits: (await sb.from("ai_cache").select("hits").eq("cache_key", key).maybeSingle()).data?.hits ? undefined : undefined, last_hit_at: new Date().toISOString() })
+    .update({ hits: (data.hits ?? 0) + 1, last_hit_at: new Date().toISOString() })
     .eq("cache_key", key)
     .then(() => {});
-  // Simpler: separate RPC-style increment
-  sb.rpc("noop").then(() => {});
-  sb.from("ai_cache").update({ last_hit_at: new Date().toISOString() }).eq("cache_key", key).then(() => {});
   return (data as any).payload;
 }
 
