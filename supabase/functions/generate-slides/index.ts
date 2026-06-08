@@ -8,22 +8,6 @@ import {
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
-function isAllowedOrigin(req: Request): boolean {
-  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
-  if (!origin) return false;
-  try {
-    const host = new URL(origin).hostname;
-    return (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.endsWith(".lovable.app") ||
-      host.endsWith(".lovable.dev") ||
-      host.endsWith(".lovableproject.com")
-    );
-  } catch {
-    return false;
-  }
-}
 
 function extractJson<T>(text: string): T {
   const cleaned = text.replace(/```json\s*|```/g, "").trim();
