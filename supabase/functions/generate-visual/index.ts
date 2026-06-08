@@ -2,12 +2,10 @@
 // and infographics (with structured stats + sections). Returns JSON, not stream.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import {
+  corsHeaders, jsonHeaders, isAllowedOrigin, requireUser,
+  checkRateLimit, cacheGet, cachePut, logUsage, sha256,
+} from "../_shared/guard.ts";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
@@ -83,44 +81,41 @@ async function generateComicImage(scene: string, style: string, key: string): Pr
   }
 }
 
-function isAllowedOrigin(req: Request): boolean {
-  const origin = req.headers.get("origin") || req.headers.get("referer") || "";
-  if (!origin) return false;
-  try {
-    const host = new URL(origin).hostname;
-    return (
-      host === "localhost" ||
-      host === "127.0.0.1" ||
-      host.endsWith(".lovable.app") ||
-      host.endsWith(".lovable.dev") ||
-      host.endsWith(".lovableproject.com")
-    );
-  } catch {
-    return false;
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
   if (!isAllowedOrigin(req)) {
-    return new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: jsonHeaders });
   }
+  const auth = await requireUser(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.userId;
+
+  const started = Date.now();
+  let kindForLog = "unknown";
 
   try {
     const { kind, documentText, knowledgeLevel, fileTags } = await req.json();
-    const key = Deno.env.get("LOVABLE_API_KEY");
-    if (!key) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    kindForLog = kind || "unknown";
+
+    const rl = await checkRateLimit(userId, "visual_gen", 10, 3600);
+    if (rl) {
+      await logUsage({ userId, mode: kindForLog, kind: "visual", status: "rate_limited" });
+      return rl;
     }
+
+    const key = Deno.env.get("LOVABLE_API_KEY");
+    if (!key) return new Response(JSON.stringify({ error: "AI not configured" }), { status: 500, headers: jsonHeaders });
 
     const level = knowledgeLevel < 33 ? "beginner" : knowledgeLevel < 66 ? "intermediate" : "expert";
     const docSlice = String(documentText || "").slice(0, 40000);
     const ctx = `Source documents: ${(fileTags || []).join(", ")}\nReader level: ${level}\n\nContent:\n${docSlice}`;
+
+    const cacheKey = await sha256(`visual:${kind}:${level}:${docSlice}`);
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      await logUsage({ userId, mode: kindForLog, kind: "visual", cacheHit: true, ms: Date.now() - started });
+      return new Response(JSON.stringify(cached), { headers: jsonHeaders });
+    }
 
     if (kind === "comic-strip") {
       const sys = `You are a comic book writer + illustrator director. Read the source document and produce a 6-panel comic that visually teaches the core concept. Return STRICT JSON only, no prose, no markdown fences.
@@ -139,20 +134,14 @@ Exactly 6 panels. Keep dialogue short. Scenes must be visually descriptive enoug
       const raw = await callChat(sys, ctx, key);
       const spec = extractJson<{ title: string; subtitle: string; style: string; panels: ComicPanel[] }>(raw);
       const panels = (spec.panels || []).slice(0, 6);
-
-      // Generate images in parallel
       const images = await Promise.all(
         panels.map(p => generateComicImage(p.scene, spec.style || "vibrant flat 2D cartoon", key))
       );
       const panelsOut = panels.map((p, i) => ({ ...p, image: images[i] }));
-
-      return new Response(JSON.stringify({
-        kind: "comic-strip",
-        title: spec.title,
-        subtitle: spec.subtitle,
-        style: spec.style,
-        panels: panelsOut,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const out = { kind: "comic-strip", title: spec.title, subtitle: spec.subtitle, style: spec.style, panels: panelsOut };
+      await cachePut(cacheKey, "comic-strip", out);
+      await logUsage({ userId, mode: "comic-strip", kind: "visual", ms: Date.now() - started });
+      return new Response(JSON.stringify(out), { headers: jsonHeaders });
     }
 
     if (kind === "infographic") {
@@ -163,26 +152,26 @@ Schema:
   "title": "Headline (max 8 words)",
   "subtitle": "Supporting line (max 18 words)",
   "takeaway": "The single most important insight",
-  "stats": [ { "value": "73%", "label": "short label", "description": "1-line context" } ],   // 3-6 items, use real numbers from the doc or omit
-  "sections": [ { "heading": "Section title", "body": "2-4 sentence explanation", "icon": "one-word lucide icon hint like 'zap' 'shield' 'trending-up' 'brain' 'globe' 'users' 'lightbulb' 'target' 'rocket' 'chart'" } ],  // 3-5 items
-  "palette": { "primary": "#hex", "secondary": "#hex", "accent": "#hex", "bg": "#hex" }  // cohesive palette that matches the topic mood
+  "template": "process | timeline | pyramid | comparison | stats",
+  "stats": [ { "value": "73%", "label": "short label", "description": "1-line context" } ],
+  "sections": [ { "heading": "Section title", "body": "2-4 sentence explanation", "icon": "one-word lucide icon hint like 'zap' 'shield' 'trending-up' 'brain' 'globe' 'users' 'lightbulb' 'target' 'rocket' 'chart'" } ],
+  "palette": { "primary": "#hex", "secondary": "#hex", "accent": "#hex", "bg": "#hex" }
 }
-Pick a palette intentionally — finance=deep blues+gold, biology=greens+coral, tech=violets+cyan, history=warm sepias, climate=teals+amber, etc.`;
+Pick the template that best fits the content. Pick a palette intentionally — finance=deep blues+gold, biology=greens+coral, tech=violets+cyan, history=warm sepias, climate=teals+amber, etc.`;
 
       const raw = await callChat(sys, ctx, key);
       const spec = extractJson<InfographicData>(raw);
-      return new Response(JSON.stringify({ kind: "infographic", ...spec }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const out = { kind: "infographic", ...spec };
+      await cachePut(cacheKey, "infographic", out);
+      await logUsage({ userId, mode: "infographic", kind: "visual", ms: Date.now() - started });
+      return new Response(JSON.stringify(out), { headers: jsonHeaders });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown kind" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Unknown kind" }), { status: 400, headers: jsonHeaders });
   } catch (e) {
     console.error("generate-visual error", e);
-    return new Response(JSON.stringify({ error: "Visual generation failed. Please try again." }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await logUsage({ userId, mode: kindForLog, kind: "visual", status: "error", ms: Date.now() - started });
+    return new Response(JSON.stringify({ error: "Visual generation failed. Please try again." }),
+      { status: 500, headers: jsonHeaders });
   }
 });
