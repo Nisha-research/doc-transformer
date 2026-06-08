@@ -1,68 +1,81 @@
-# StudyForge → Premium AI Knowledge Workspace
+# StudyForge → Premium Knowledge Studio
 
-This is a very large scope (themes, workspace layout, 23+ output modes, Claude-style docs, NotebookLM-style visuals, PPT/image/audio generators, flashcards, quizzes, chat-with-docs, exports). Building all of it in one pass would produce shallow features. I'll deliver it in focused phases so each lands polished. **This plan covers Phase 1–3; later phases will be planned after you see the foundation.**
-
----
-
-## Phase 1 — Foundation (this round)
-
-### 1. Theme System
-
-- `next-themes` provider + `ThemeToggle` in navbar (sun/moon).
-- Light: white bg / slate-50 cards / slate-900 text. Dark: slate-950 / slate-900 / slate-100.
-- Update `index.css` HSL tokens for both modes, smooth color transitions.
-- Persists to localStorage, respects system preference.
-
-### 2. Expanded Output Modes (from your image + spec — 28 total)
-
-Reorganized into 4 categories with icons:
-
-- **Academic**: Structured Study Notes, Comic Strip Panels, Interactive Mind Map, Chronological Timeline, Active Recall MCQ Trivia, Flashcards, Exam Prep, Cheat Sheet, Glossary, Study Guide, Lecture Notes, Lesson Plan
-- **Professional**: Covenant/Risk Assessment, Investigative Executive Digest, Meeting Notes, SOP Generator, Resume Bullets, Case Study,Chronological Timeline,  Comparative Synthesis
-- **Creator**: Social Hook Threads (Twitter), LinkedIn Post, Blog Article, Podcast Script
-- **General**: Smart Notes, Executive Summary, FAQ, Book Summary, Research Report,Chronological Timeline, Comic Strip Panels, Interactive Mind Map
-
-Each as a card with Lucide icon, gradient accent, description. Update edge-function system prompts to match.
-
-### 3. Workspace Layout (replaces current ResultsView)
-
-Three-pane shell using `react-resizable-panels`:
-
-- **Left sidebar**: uploaded documents list, source chips, collections placeholder.
-- **Center**: generated output (Claude-style renderer — see below).
-- **Right sidebar**: quick actions (regenerate, change mode), export buttons (MD/PDF/TXT), related output suggestions.
-- **Top toolbar**: editable workspace title, search input (stub), download menu, share (copy link), theme toggle.
-- Collapsible sidebars; mobile = stacked tabs.
-
-### 4. Claude-Style Document Renderer
-
-- `react-markdown` + `remark-gfm` + `rehype-slug` + `rehype-autolink-headings`.
-- Custom components for h1/h2/h3, callouts (`> [!NOTE]`), tables, code (with `react-syntax-highlighter`), bullets.
-- Max-width ~850px, refined typography (serif display + sans body).
-- Auto-generated **sticky TOC** on desktop from headings.
-- Streaming-aware (renders as tokens arrive).
+This is a very large scope. I'll deliver it in 5 sequential phases so each milestone is verifiable in the preview. Confirm and I'll start with Phase A.
 
 ---
 
-## Phase 2 — Interactive Outputs (next round)
+## Phase A — Security & Billing Protection
+**Goal:** prevent abuse before we add expensive AI features.
 
-Flashcards (flip + spaced repetition + progress), Active Recall quiz UI (MCQ/T-F/fill-blank with scoring), full Export Center (PDF via `jspdf`, DOCX via `docx`, PPTX via `pptxgenjs`), Mind Map visual (react-flow), Timeline visual, Comparison Tables.
-
-## Phase 3 — Generators & Chat (later round)
-
-PPT Generator with slide previews, Image Studio (Gemini image gen via Lovable AI), Audio/Podcast (TTS), AI Chat-with-documents (citations + multi-doc), Document Viewer with PDF.js.
+1. **Auth**
+   - Lovable Cloud email/password + Google sign-in.
+   - `/auth` route (login/signup), session listener, protected routes.
+   - `profiles` table (id, display_name, avatar_url) auto-created via trigger.
+   - `user_roles` table + `has_role()` security-definer fn (admin role for dashboard).
+2. **Per-user rate limiting**
+   - `rate_limits` table: `user_id, bucket, window_start, count`.
+   - Edge-function helper `checkRateLimit(userId, bucket, max, windowSec)` — 429 with retry-after when exceeded.
+   - Buckets: `text_gen` (30/hr), `visual_gen` (10/hr), `slides_gen` (10/hr).
+3. **AI response cache**
+   - `ai_cache` table: `cache_key (sha256), mode, payload jsonb, created_at, hits`.
+   - Key = sha256(modeId + knowledgeLevel + documentText).
+   - Hit → return cached payload + increment `hits`; miss → call AI, store.
+4. **Usage ledger** (feeds analytics)
+   - `usage_events` table: `user_id, mode, ms, tokens_in, tokens_out, cache_hit, created_at`.
 
 ---
 
-## Technical Notes
-
-- New deps: `next-themes`, `react-markdown`, `remark-gfm`, `rehype-slug`, `rehype-autolink-headings`, `react-syntax-highlighter`, `react-resizable-panels`.
-- Edge function `process-document/index.ts`: extend `SYSTEM_PROMPTS` map with new mode IDs; instruct model to emit rich markdown (headings, callouts, tables) for long-form modes.
-- `output-modes.ts`: full rewrite with 28 modes across 4 categories.
-- New components: `ThemeToggle`, `WorkspaceShell`, `WorkspaceSidebar`, `WorkspaceToolbar`, `ActionsPanel`, `DocumentRenderer`, `TableOfContents`.
-- `Index.tsx`: swap ResultsView → WorkspaceShell on results state.
-- No backend schema changes in Phase 1 (still no-login, session-based).
+## Phase B — NotebookLM-grade Visuals
+1. **Mind Map redesign**
+   - Replace current view with **React Flow + Dagre** auto-layout.
+   - Central node + colored branches per category, lucide icons, curved/animated edges, expand/collapse, zoom/pan/minimap.
+   - Export PNG / SVG / Interactive HTML.
+2. **Infographic redesign — 5 templates**
+   - Process Flow, Timeline, Pyramid, Comparison Cards, Stats Grid.
+   - Edge function returns a `template + sections[]` JSON; renderer picks template.
+   - Designed with category palettes, gradients, large icons, Canva-feel.
+   - Export PDF / PNG / HTML (existing `visual-exporters.ts`).
 
 ---
 
-**Confirm to proceed with Phase 1**, or tell me to re-prioritize (e.g. "do PPT generator first" or "skip workspace layout, just add modes + theme").
+## Phase C — Performance / SEO / PWA
+1. **Code splitting**: `React.lazy` for `SlideDeckView`, `MindMapView`, `InfographicView`, `ComicStripView`, `FlashcardsView`, `QuizView`, `TimelineView`, markdown renderer, syntax highlighter, pptxgenjs, html2canvas, jsPDF.
+2. **Virtualization** for long documents (`react-window`).
+3. **SEO**: per-route `react-helmet-async`, real `<title>`/description, JSON-LD Organization, sitemap.xml, robots.txt.
+4. **PWA**: manifest + icons (home-screen install only, no SW unless asked).
+5. Reduce heavy blur/gradients on initial paint; defer animations.
+
+---
+
+## Phase D — Analytics + Admin Dashboard
+- `/admin` route (gated by `has_role('admin')`).
+- Charts (recharts) over `usage_events` + `ai_cache`:
+  - Most-used modes (bar)
+  - Avg generation time per mode (bar)
+  - API calls vs cache hits (stacked area, last 30d)
+  - Credits/tokens consumed (line)
+  - Active users (DAU/WAU/MAU)
+  - p50/p95 latency
+- CSV export.
+
+---
+
+## Phase E — Hero & IA Redesign ("Knowledge Studio")
+1. **Hero**: new headline ("Transform Any Document Into Study Materials, Presentations, Mind Maps and Visual Knowledge"), dual CTA (Upload / See Demo), animated carousel preview (Notes → Mind Map → Infographic → Slides).
+2. **IA**: replace 4 audience categories with 4 task tabs — **Learn / Visualize / Present / Create** — each grouping the existing modes; star the flagships.
+3. **Bento layout** for output picker (large Smart Notes + Mind Map tiles, smaller secondary tiles).
+4. **Knowledge Level slider**: 3 stops with emoji + live example snippet under each.
+5. **Doc reader polish**: sticky TOC already exists; add colored callouts (note/warn/tip already in `DocumentRenderer`), collapsible `<details>` sections, nicer tables.
+6. **Streaming status pills** ("✔ Summary  ⏳ Examples…") above the streamed doc.
+
+---
+
+## Tech notes
+- Stack stays React 18 + Vite + Tailwind + Framer Motion + shadcn.
+- New deps: `reactflow`, `dagre`, `react-helmet-async`, `react-window`, `recharts` (already present? check), `@supabase` already wired.
+- All edge functions reuse existing origin-allowlist + generic error pattern.
+- Roles in dedicated `user_roles` table; never on `profiles`.
+
+---
+
+**Estimated**: ~5 sequential AI turns, one phase each, each independently shippable. Reply "go" (or name a phase to start with) and I'll begin Phase A.
