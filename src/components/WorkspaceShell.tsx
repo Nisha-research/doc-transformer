@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Copy, Download, Share2, Search, RefreshCw, FileText,
@@ -14,18 +14,20 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { type OutputMode, getModeById } from '@/lib/output-modes';
 import { type UploadedFile } from '@/lib/file-utils';
 import { DocumentRenderer, TableOfContents, extractToc } from '@/components/DocumentRenderer';
-import { FlashcardsView } from '@/components/views/FlashcardsView';
-import { QuizView } from '@/components/views/QuizView';
-import { TimelineView } from '@/components/views/TimelineView';
-import { MindMapView } from '@/components/views/MindMapView';
-import { ComicStripView } from '@/components/views/ComicStripView';
-import { InfographicView } from '@/components/views/InfographicView';
-import { SlideDeckView } from '@/components/views/SlideDeckView';
-import {
-  exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
-} from '@/lib/exporters';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+// Heavy interactive/visual views are code-split to keep initial bundle small.
+const FlashcardsView = lazy(() => import('@/components/views/FlashcardsView').then(m => ({ default: m.FlashcardsView })));
+const QuizView = lazy(() => import('@/components/views/QuizView').then(m => ({ default: m.QuizView })));
+const TimelineView = lazy(() => import('@/components/views/TimelineView').then(m => ({ default: m.TimelineView })));
+const MindMapView = lazy(() => import('@/components/views/MindMapView').then(m => ({ default: m.MindMapView })));
+const ComicStripView = lazy(() => import('@/components/views/ComicStripView').then(m => ({ default: m.ComicStripView })));
+const InfographicView = lazy(() => import('@/components/views/InfographicView').then(m => ({ default: m.InfographicView })));
+const SlideDeckView = lazy(() => import('@/components/views/SlideDeckView').then(m => ({ default: m.SlideDeckView })));
+
+// Exporters are heavy (pptxgenjs, jsPDF, docx, html2canvas) — only load on demand.
+const loadExporters = () => import('@/lib/exporters');
 
 interface WorkspaceShellProps {
   mode: OutputMode;
