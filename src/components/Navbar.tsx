@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 
 export function Navbar() {
   const { timeRemaining, formatTime } = useSession();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const onSignOut = async () => {
@@ -63,9 +63,11 @@ export function Navbar() {
                   Signed in as<br /><span className="text-foreground font-medium">{user.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/admin')}>
-                  <UserIcon className="w-4 h-4 mr-2" /> Dashboard
-                </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate('/admin')}>
+                    <UserIcon className="w-4 h-4 mr-2" /> Admin analytics
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={onSignOut} className="text-destructive">
                   <LogOut className="w-4 h-4 mr-2" /> Sign out
                 </DropdownMenuItem>
