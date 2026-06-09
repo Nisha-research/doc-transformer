@@ -84,11 +84,12 @@ export function WorkspaceShell({
     if (!result) return;
     try {
       const t = title;
-      if (kind === 'md') exportMarkdown(result, t);
-      else if (kind === 'txt') exportTxt(result, t);
-      else if (kind === 'pdf') exportPdf(result, t);
-      else if (kind === 'docx') await exportDocx(result, t);
-      else if (kind === 'pptx') await exportPptx(result, t);
+      const ex = await loadExporters();
+      if (kind === 'md') ex.exportMarkdown(result, t);
+      else if (kind === 'txt') ex.exportTxt(result, t);
+      else if (kind === 'pdf') ex.exportPdf(result, t);
+      else if (kind === 'docx') await ex.exportDocx(result, t);
+      else if (kind === 'pptx') await ex.exportPptx(result, t);
       toast.success(`Exported as .${kind}`);
     } catch (e) {
       console.error(e);
