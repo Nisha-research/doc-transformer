@@ -289,13 +289,15 @@ function CenterPanel({
         <div className="min-w-0">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(!showInteractive && 'max-w-[850px] mx-auto')}>
             {showInteractive ? (
-              interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
-              interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
-              interactiveKind === 'slides' ? <SlideDeckView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
-              interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
-              interactiveKind === 'quiz' ? <QuizView content={result!} /> :
-              interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
-              interactiveKind === 'mindmap' ? <MindMapView content={result!} /> : null
+              <Suspense fallback={<div className="flex items-center justify-center py-32"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}>
+                {interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+                 interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+                 interactiveKind === 'slides' ? <SlideDeckView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+                 interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
+                 interactiveKind === 'quiz' ? <QuizView content={result!} /> :
+                 interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
+                 interactiveKind === 'mindmap' ? <MindMapView content={result!} /> : null}
+              </Suspense>
             ) : isLoading && !result ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
