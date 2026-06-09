@@ -97,7 +97,7 @@ Rules:
 - Always include "notes".
 - Reader level: ${level}.
 
-Source documents: ${(fileTags || []).join(", ")}
+Source documents: ${tags.join(", ")}
 
 Content:
 ${docSlice}`;
