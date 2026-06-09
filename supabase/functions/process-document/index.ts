@@ -161,7 +161,7 @@ serve(async (req) => {
     }
 
     // Cache check
-    const cacheKey = await sha256(`text:${modeId}:${knowledgeLevel ?? 50}:${String(documentText).slice(0, 80000)}`);
+    const cacheKey = await sha256(`text:${modeId}:${level}:${documentText.slice(0, 80000)}`);
     const cached = await cacheGet(cacheKey) as { text: string } | null;
     if (cached?.text) {
       await logUsage({ userId, mode: modeId, kind: "text", cacheHit: true, ms: Date.now() - started });
@@ -172,10 +172,10 @@ serve(async (req) => {
 
     const systemBase = SYSTEM_PROMPTS[modeId] ||
       "You are a helpful document assistant. Analyze the provided document and generate a clear, well-structured output.";
-    const levelInstruction = getKnowledgeLevelInstruction(knowledgeLevel ?? 50);
-    const fileContext = fileTags?.length ? `\nSource documents: ${fileTags.join(", ")}` : "";
+    const levelInstruction = getKnowledgeLevelInstruction(level);
+    const fileContext = tags.length ? `\nSource documents: ${tags.join(", ")}` : "";
     const systemPrompt = `${systemBase}${RICH_MD_INSTRUCTION}\n\n${levelInstruction}${fileContext}`;
-    const userMessage = `Here is the document content to process:\n\n---\n${String(documentText).slice(0, 80000)}\n---\n\nGenerate the output now following ALL formatting requirements.`;
+    const userMessage = `Here is the document content to process:\n\n---\n${documentText.slice(0, 80000)}\n---\n\nGenerate the output now following ALL formatting requirements.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
