@@ -94,8 +94,24 @@ serve(async (req) => {
   let kindForLog = "unknown";
 
   try {
-    const { kind, documentText, knowledgeLevel, fileTags } = await req.json();
-    kindForLog = kind || "unknown";
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: jsonHeaders });
+    }
+    const { kind, documentText, knowledgeLevel, fileTags } = body as Record<string, unknown>;
+    kindForLog = typeof kind === "string" ? kind : "unknown";
+
+    if (kind !== "comic-strip" && kind !== "infographic") {
+      return new Response(JSON.stringify({ error: "Unknown kind" }), { status: 400, headers: jsonHeaders });
+    }
+    if (typeof documentText !== "string" || documentText.length === 0) {
+      return new Response(JSON.stringify({ error: "Missing documentText" }), { status: 400, headers: jsonHeaders });
+    }
+    if (documentText.length > 1_000_000) {
+      return new Response(JSON.stringify({ error: "Document too large (max ~1MB)" }), { status: 413, headers: jsonHeaders });
+    }
+    const lvl = typeof knowledgeLevel === "number" && knowledgeLevel >= 0 && knowledgeLevel <= 100 ? knowledgeLevel : 50;
+    const tags = Array.isArray(fileTags) ? fileTags.filter(t => typeof t === "string").slice(0, 20).map(t => String(t).slice(0, 120)) : [];
 
     const rl = await checkRateLimit(userId, "visual_gen", 10, 3600);
     if (rl) {
@@ -106,9 +122,9 @@ serve(async (req) => {
     const key = Deno.env.get("LOVABLE_API_KEY");
     if (!key) return new Response(JSON.stringify({ error: "AI not configured" }), { status: 500, headers: jsonHeaders });
 
-    const level = knowledgeLevel < 33 ? "beginner" : knowledgeLevel < 66 ? "intermediate" : "expert";
-    const docSlice = String(documentText || "").slice(0, 40000);
-    const ctx = `Source documents: ${(fileTags || []).join(", ")}\nReader level: ${level}\n\nContent:\n${docSlice}`;
+    const level = lvl < 33 ? "beginner" : lvl < 66 ? "intermediate" : "expert";
+    const docSlice = documentText.slice(0, 40000);
+    const ctx = `Source documents: ${tags.join(", ")}\nReader level: ${level}\n\nContent:\n${docSlice}`;
 
     const cacheKey = await sha256(`visual:${kind}:${level}:${docSlice}`);
     const cached = await cacheGet(cacheKey);
