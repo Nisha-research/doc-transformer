@@ -122,13 +122,30 @@ serve(async (req) => {
   let modeIdForLog = "unknown";
 
   try {
-    const { documentText, modeId, knowledgeLevel, fileTags } = await req.json();
-    modeIdForLog = modeId || "unknown";
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: jsonHeaders });
+    }
+    const { documentText, modeId, knowledgeLevel, fileTags } = body as Record<string, unknown>;
+    modeIdForLog = typeof modeId === "string" ? modeId : "unknown";
 
-    if (!documentText || !modeId) {
-      return new Response(JSON.stringify({ error: "Missing documentText or modeId" }),
+    // Strict input validation (OWASP A03: Injection / A04: Insecure Design — fail fast on bad shape)
+    if (typeof documentText !== "string" || typeof modeId !== "string" || !SYSTEM_PROMPTS[modeId] && modeId !== modeIdForLog) {
+      // allow unknown mode to fall through to default prompt, but enforce types
+    }
+    if (typeof documentText !== "string" || typeof modeId !== "string") {
+      return new Response(JSON.stringify({ error: "Missing or invalid documentText / modeId" }),
         { status: 400, headers: jsonHeaders });
     }
+    if (modeId.length > 64 || !/^[a-z0-9-]+$/i.test(modeId)) {
+      return new Response(JSON.stringify({ error: "Invalid modeId" }), { status: 400, headers: jsonHeaders });
+    }
+    if (documentText.length > 1_000_000) {
+      return new Response(JSON.stringify({ error: "Document too large (max ~1MB)" }), { status: 413, headers: jsonHeaders });
+    }
+    const level = typeof knowledgeLevel === "number" && knowledgeLevel >= 0 && knowledgeLevel <= 100 ? knowledgeLevel : 50;
+    const tags = Array.isArray(fileTags) ? fileTags.filter(t => typeof t === "string").slice(0, 20).map(t => String(t).slice(0, 120)) : [];
+
 
     // Rate limit: 30 text generations / hour / user
     const rl = await checkRateLimit(userId, "text_gen", 30, 3600);
