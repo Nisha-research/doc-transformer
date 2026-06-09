@@ -122,13 +122,30 @@ serve(async (req) => {
   let modeIdForLog = "unknown";
 
   try {
-    const { documentText, modeId, knowledgeLevel, fileTags } = await req.json();
-    modeIdForLog = modeId || "unknown";
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: jsonHeaders });
+    }
+    const { documentText, modeId, knowledgeLevel, fileTags } = body as Record<string, unknown>;
+    modeIdForLog = typeof modeId === "string" ? modeId : "unknown";
 
-    if (!documentText || !modeId) {
-      return new Response(JSON.stringify({ error: "Missing documentText or modeId" }),
+    // Strict input validation (OWASP A03: Injection / A04: Insecure Design — fail fast on bad shape)
+    if (typeof documentText !== "string" || typeof modeId !== "string" || !SYSTEM_PROMPTS[modeId] && modeId !== modeIdForLog) {
+      // allow unknown mode to fall through to default prompt, but enforce types
+    }
+    if (typeof documentText !== "string" || typeof modeId !== "string") {
+      return new Response(JSON.stringify({ error: "Missing or invalid documentText / modeId" }),
         { status: 400, headers: jsonHeaders });
     }
+    if (modeId.length > 64 || !/^[a-z0-9-]+$/i.test(modeId)) {
+      return new Response(JSON.stringify({ error: "Invalid modeId" }), { status: 400, headers: jsonHeaders });
+    }
+    if (documentText.length > 1_000_000) {
+      return new Response(JSON.stringify({ error: "Document too large (max ~1MB)" }), { status: 413, headers: jsonHeaders });
+    }
+    const level = typeof knowledgeLevel === "number" && knowledgeLevel >= 0 && knowledgeLevel <= 100 ? knowledgeLevel : 50;
+    const tags = Array.isArray(fileTags) ? fileTags.filter(t => typeof t === "string").slice(0, 20).map(t => String(t).slice(0, 120)) : [];
+
 
     // Rate limit: 30 text generations / hour / user
     const rl = await checkRateLimit(userId, "text_gen", 30, 3600);
@@ -144,7 +161,7 @@ serve(async (req) => {
     }
 
     // Cache check
-    const cacheKey = await sha256(`text:${modeId}:${knowledgeLevel ?? 50}:${String(documentText).slice(0, 80000)}`);
+    const cacheKey = await sha256(`text:${modeId}:${level}:${documentText.slice(0, 80000)}`);
     const cached = await cacheGet(cacheKey) as { text: string } | null;
     if (cached?.text) {
       await logUsage({ userId, mode: modeId, kind: "text", cacheHit: true, ms: Date.now() - started });
@@ -155,10 +172,10 @@ serve(async (req) => {
 
     const systemBase = SYSTEM_PROMPTS[modeId] ||
       "You are a helpful document assistant. Analyze the provided document and generate a clear, well-structured output.";
-    const levelInstruction = getKnowledgeLevelInstruction(knowledgeLevel ?? 50);
-    const fileContext = fileTags?.length ? `\nSource documents: ${fileTags.join(", ")}` : "";
+    const levelInstruction = getKnowledgeLevelInstruction(level);
+    const fileContext = tags.length ? `\nSource documents: ${tags.join(", ")}` : "";
     const systemPrompt = `${systemBase}${RICH_MD_INSTRUCTION}\n\n${levelInstruction}${fileContext}`;
-    const userMessage = `Here is the document content to process:\n\n---\n${String(documentText).slice(0, 80000)}\n---\n\nGenerate the output now following ALL formatting requirements.`;
+    const userMessage = `Here is the document content to process:\n\n---\n${documentText.slice(0, 80000)}\n---\n\nGenerate the output now following ALL formatting requirements.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

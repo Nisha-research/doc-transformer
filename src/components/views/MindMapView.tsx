@@ -1,6 +1,9 @@
 import { useMemo, useRef } from 'react';
-import ReactFlow, { Background, Controls, MarkerType, type Edge, type Node } from 'reactflow';
+import ReactFlow, {
+  Background, Controls, MiniMap, MarkerType, type Edge, type Node, Position,
+} from 'reactflow';
 import 'reactflow/dist/style.css';
+import dagre from 'dagre';
 import { Download, FileImage, FileText, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,57 +13,75 @@ import { parseMindMap, type MindMapNode } from '@/lib/parsers';
 import { exportElementAsPdf, exportElementAsPng } from '@/lib/visual-exporters';
 import { toast } from 'sonner';
 
-const LEVEL_COLORS = ['hsl(var(--accent))', 'hsl(var(--student))', 'hsl(var(--creator))', 'hsl(var(--professional))', 'hsl(var(--general))'];
+const PALETTE = [
+  { ring: '#6366f1', bg: 'linear-gradient(135deg,#6366f1,#8b5cf6)', fg: '#ffffff' }, // root
+  { ring: '#06b6d4', bg: '#0f172a', fg: '#e0f2fe' },
+  { ring: '#f59e0b', bg: '#1e293b', fg: '#fde68a' },
+  { ring: '#10b981', bg: '#0b1220', fg: '#a7f3d0' },
+  { ring: '#ec4899', bg: '#1f0d18', fg: '#fbcfe8' },
+];
+
+const NODE_W = 220;
+const NODE_H = 56;
 
 function layout(root: MindMapNode) {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 80, marginx: 20, marginy: 20 });
+
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  const leafCount = (n: MindMapNode): number =>
-    n.children.length ? n.children.reduce((s, c) => s + leafCount(c), 0) : 1;
 
-  const xStep = 260;
-  const yStep = 60;
-
-  const place = (n: MindMapNode, depth: number, yStart: number): number => {
-    const leaves = leafCount(n);
-    const y = yStart + (leaves * yStep) / 2 - yStep / 2;
-    const color = LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length - 1)];
+  const walk = (n: MindMapNode, depth: number) => {
+    g.setNode(n.id, { width: NODE_W, height: NODE_H });
+    const p = PALETTE[Math.min(depth, PALETTE.length - 1)];
     nodes.push({
       id: n.id,
-      position: { x: depth * xStep, y },
+      position: { x: 0, y: 0 },
       data: { label: n.text },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
       style: {
-        border: `1.5px solid ${color}`,
-        background: 'hsl(var(--card))',
-        color: 'hsl(var(--foreground))',
-        borderRadius: 12,
-        padding: '8px 12px',
+        width: NODE_W,
+        padding: '10px 14px',
+        borderRadius: 14,
+        border: `1.5px solid ${p.ring}`,
+        background: p.bg,
+        color: p.fg,
         fontSize: depth === 0 ? 14 : 12,
-        fontWeight: depth === 0 ? 600 : 500,
-        maxWidth: 220,
-        boxShadow: '0 4px 12px hsl(var(--background) / 0.4)',
+        fontWeight: depth === 0 ? 700 : 500,
+        boxShadow: depth === 0 ? `0 12px 36px ${p.ring}55` : `0 4px 14px rgba(0,0,0,0.35)`,
+        textAlign: 'left' as const,
+        lineHeight: 1.25,
       },
-      sourcePosition: 'right' as any,
-      targetPosition: 'left' as any,
     });
-    let cursor = yStart;
     for (const c of n.children) {
-      const childLeaves = leafCount(c);
+      g.setEdge(n.id, c.id);
       edges.push({
         id: `${n.id}-${c.id}`,
-        source: n.id, target: c.id,
-        type: 'smoothstep', animated: false,
-        style: { stroke: color, strokeWidth: 1.5 },
-        markerEnd: { type: MarkerType.ArrowClosed, color },
+        source: n.id,
+        target: c.id,
+        type: 'smoothstep',
+        animated: depth === 0,
+        style: { stroke: p.ring, strokeWidth: 1.75 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: p.ring, width: 16, height: 16 },
       });
-      place(c, depth + 1, cursor);
-      cursor += childLeaves * yStep;
+      walk(c, depth + 1);
     }
-    return y;
   };
 
-  place(root, 0, 0);
+  walk(root, 0);
+  dagre.layout(g);
+
+  for (const n of nodes) {
+    const p = g.node(n.id);
+    if (p) n.position = { x: p.x - NODE_W / 2, y: p.y - NODE_H / 2 };
+  }
   return { nodes, edges };
+}
+
+function escapeHtml(s: string) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function toMindmapHtml(root: MindMapNode, title: string): string {
@@ -77,15 +98,10 @@ function toMindmapHtml(root: MindMapNode, title: string): string {
   ul { list-style:none; padding-left: 24px; border-left: 2px solid #334155; }
   li { margin: 8px 0; }
   .node { display:inline-block; padding:6px 14px; border-radius:10px; background:#1e293b; border:1.5px solid #6366f1; font-weight:500; }
-  .l0 { background:#6366f1; color:#fff; font-weight:700; font-size:18px; }
-  .l1 { border-color:#a855f7; }
-  .l2 { border-color:#06b6d4; }
-  .l3 { border-color:#f59e0b; }
+  .l0 { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-weight:700; font-size:18px; border:none; }
+  .l1 { border-color:#06b6d4; } .l2 { border-color:#f59e0b; } .l3 { border-color:#10b981; }
 </style></head>
 <body><h1>${escapeHtml(title)}</h1><ul>${renderNode(root)}</ul></body></html>`;
-}
-function escapeHtml(s: string) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 export function MindMapView({ content }: { content: string }) {
@@ -140,14 +156,16 @@ export function MindMapView({ content }: { content: string }) {
         </DropdownMenu>
       </div>
 
-      <div ref={stageRef} className="h-[600px] rounded-2xl border border-border bg-card overflow-hidden">
+      <div ref={stageRef} className="h-[640px] rounded-2xl border border-border bg-card overflow-hidden">
         <ReactFlow
           nodes={nodes} edges={edges}
           fitView fitViewOptions={{ padding: 0.2 }}
           proOptions={{ hideAttribution: true }}
           nodesDraggable nodesConnectable={false} elementsSelectable
+          minZoom={0.2} maxZoom={2}
         >
-          <Background color="hsl(var(--border))" gap={20} />
+          <Background color="hsl(var(--border))" gap={22} />
+          <MiniMap pannable zoomable className="!bg-card !border !border-border" maskColor="hsl(var(--background) / 0.7)" />
           <Controls className="!bg-card !border-border" />
         </ReactFlow>
       </div>

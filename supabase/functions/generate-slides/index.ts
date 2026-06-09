@@ -28,7 +28,20 @@ serve(async (req) => {
   const started = Date.now();
 
   try {
-    const { documentText, knowledgeLevel, fileTags, slideCount } = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400, headers: jsonHeaders });
+    }
+    const { documentText, knowledgeLevel, fileTags, slideCount } = body as Record<string, unknown>;
+
+    if (typeof documentText !== "string" || documentText.length === 0) {
+      return new Response(JSON.stringify({ error: "Missing documentText" }), { status: 400, headers: jsonHeaders });
+    }
+    if (documentText.length > 1_000_000) {
+      return new Response(JSON.stringify({ error: "Document too large (max ~1MB)" }), { status: 413, headers: jsonHeaders });
+    }
+    const lvl = typeof knowledgeLevel === "number" && knowledgeLevel >= 0 && knowledgeLevel <= 100 ? knowledgeLevel : 50;
+    const tags = Array.isArray(fileTags) ? fileTags.filter(t => typeof t === "string").slice(0, 20).map(t => String(t).slice(0, 120)) : [];
 
     const rl = await checkRateLimit(userId, "slides_gen", 10, 3600);
     if (rl) {
@@ -39,9 +52,9 @@ serve(async (req) => {
     const key = Deno.env.get("LOVABLE_API_KEY");
     if (!key) return new Response(JSON.stringify({ error: "AI not configured" }), { status: 500, headers: jsonHeaders });
 
-    const level = knowledgeLevel < 33 ? "beginner" : knowledgeLevel < 66 ? "intermediate" : "expert";
+    const level = lvl < 33 ? "beginner" : lvl < 66 ? "intermediate" : "expert";
     const count = Math.min(Math.max(Number(slideCount) || 10, 6), 18);
-    const docSlice = String(documentText || "").slice(0, 60000);
+    const docSlice = documentText.slice(0, 60000);
 
     const cacheKey = await sha256(`slides:${level}:${count}:${docSlice}`);
     const cached = await cacheGet(cacheKey);
@@ -84,7 +97,7 @@ Rules:
 - Always include "notes".
 - Reader level: ${level}.
 
-Source documents: ${(fileTags || []).join(", ")}
+Source documents: ${tags.join(", ")}
 
 Content:
 ${docSlice}`;

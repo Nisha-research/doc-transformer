@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Navbar } from '@/components/Navbar';
 import { HeroSection } from '@/components/HeroSection';
 import { FileUploadZone } from '@/components/FileUploadZone';
@@ -10,6 +11,16 @@ import { type UploadedFile } from '@/lib/file-utils';
 import { type OutputMode, getModeById } from '@/lib/output-modes';
 import { streamDocument, extractTextFromFiles } from '@/lib/ai-stream';
 import { toast } from 'sonner';
+
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "StudyForge",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Web",
+  "description": "Turn any document into AI-generated notes, mind maps, infographics, flashcards and presentations.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+};
 
 type AppStep = 'upload' | 'select-mode' | 'results';
 
@@ -99,6 +110,11 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>StudyForge — Turn any document into notes, mind maps & decks</title>
+        <meta name="description" content="Upload PDFs, slides or notes and generate study guides, mind maps, infographics, flashcards and presentations with AI." />
+        <script type="application/ld+json">{JSON.stringify(JSON_LD)}</script>
+      </Helmet>
       <Navbar />
 
       {step === 'upload' && (

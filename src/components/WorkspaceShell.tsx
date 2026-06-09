@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft, Copy, Download, Share2, Search, RefreshCw, FileText,
@@ -14,18 +14,20 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 import { type OutputMode, getModeById } from '@/lib/output-modes';
 import { type UploadedFile } from '@/lib/file-utils';
 import { DocumentRenderer, TableOfContents, extractToc } from '@/components/DocumentRenderer';
-import { FlashcardsView } from '@/components/views/FlashcardsView';
-import { QuizView } from '@/components/views/QuizView';
-import { TimelineView } from '@/components/views/TimelineView';
-import { MindMapView } from '@/components/views/MindMapView';
-import { ComicStripView } from '@/components/views/ComicStripView';
-import { InfographicView } from '@/components/views/InfographicView';
-import { SlideDeckView } from '@/components/views/SlideDeckView';
-import {
-  exportMarkdown, exportTxt, exportPdf, exportDocx, exportPptx,
-} from '@/lib/exporters';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+
+// Heavy interactive/visual views are code-split to keep initial bundle small.
+const FlashcardsView = lazy(() => import('@/components/views/FlashcardsView').then(m => ({ default: m.FlashcardsView })));
+const QuizView = lazy(() => import('@/components/views/QuizView').then(m => ({ default: m.QuizView })));
+const TimelineView = lazy(() => import('@/components/views/TimelineView').then(m => ({ default: m.TimelineView })));
+const MindMapView = lazy(() => import('@/components/views/MindMapView').then(m => ({ default: m.MindMapView })));
+const ComicStripView = lazy(() => import('@/components/views/ComicStripView').then(m => ({ default: m.ComicStripView })));
+const InfographicView = lazy(() => import('@/components/views/InfographicView').then(m => ({ default: m.InfographicView })));
+const SlideDeckView = lazy(() => import('@/components/views/SlideDeckView').then(m => ({ default: m.SlideDeckView })));
+
+// Exporters are heavy (pptxgenjs, jsPDF, docx, html2canvas) — only load on demand.
+const loadExporters = () => import('@/lib/exporters');
 
 interface WorkspaceShellProps {
   mode: OutputMode;
@@ -82,11 +84,12 @@ export function WorkspaceShell({
     if (!result) return;
     try {
       const t = title;
-      if (kind === 'md') exportMarkdown(result, t);
-      else if (kind === 'txt') exportTxt(result, t);
-      else if (kind === 'pdf') exportPdf(result, t);
-      else if (kind === 'docx') await exportDocx(result, t);
-      else if (kind === 'pptx') await exportPptx(result, t);
+      const ex = await loadExporters();
+      if (kind === 'md') ex.exportMarkdown(result, t);
+      else if (kind === 'txt') ex.exportTxt(result, t);
+      else if (kind === 'pdf') ex.exportPdf(result, t);
+      else if (kind === 'docx') await ex.exportDocx(result, t);
+      else if (kind === 'pptx') await ex.exportPptx(result, t);
       toast.success(`Exported as .${kind}`);
     } catch (e) {
       console.error(e);
@@ -286,13 +289,15 @@ function CenterPanel({
         <div className="min-w-0">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={cn(!showInteractive && 'max-w-[850px] mx-auto')}>
             {showInteractive ? (
-              interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
-              interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
-              interactiveKind === 'slides' ? <SlideDeckView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
-              interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
-              interactiveKind === 'quiz' ? <QuizView content={result!} /> :
-              interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
-              interactiveKind === 'mindmap' ? <MindMapView content={result!} /> : null
+              <Suspense fallback={<div className="flex items-center justify-center py-32"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>}>
+                {interactiveKind === 'comic' ? <ComicStripView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+                 interactiveKind === 'infographic' ? <InfographicView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+                 interactiveKind === 'slides' ? <SlideDeckView files={files} knowledgeLevel={knowledgeLevel} generationKey={generationKey} /> :
+                 interactiveKind === 'flashcards' ? <FlashcardsView content={result!} /> :
+                 interactiveKind === 'quiz' ? <QuizView content={result!} /> :
+                 interactiveKind === 'timeline' ? <TimelineView content={result!} /> :
+                 interactiveKind === 'mindmap' ? <MindMapView content={result!} /> : null}
+              </Suspense>
             ) : isLoading && !result ? (
               <div className="flex flex-col items-center justify-center py-32 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-accent" />
