@@ -33,28 +33,30 @@ function PageFallback() {
 }
 
 const App = () => (
-  <HelmetProvider>
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AuthProvider>
-              <Suspense fallback={<PageFallback />}>
-                <Routes>
-                  <Route path="/auth" element={<AuthPage />} />
-                  <Route path="/admin" element={<Protected><AdminPage /></Protected>} />
-                  <Route path="/" element={<Protected><Index /></Protected>} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </AuthProvider>
-          </BrowserRouter>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
-  </HelmetProvider>
+  <ErrorBoundary>
+    <HelmetProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AuthProvider>
+                <Suspense fallback={<PageFallback />}>
+                  <Routes>
+                    <Route path="/auth" element={<AuthPage />} />
+                    <Route path="/admin" element={<Protected><AdminPage /></Protected>} />
+                    <Route path="/" element={<Protected><Index /></Protected>} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </AuthProvider>
+            </BrowserRouter>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </HelmetProvider>
+  </ErrorBoundary>
 );
 
 export default App;
