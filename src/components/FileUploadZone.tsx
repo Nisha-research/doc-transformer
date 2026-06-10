@@ -42,7 +42,7 @@ export function FileUploadZone({ onFilesReady }: FileUploadZoneProps) {
   const acceptString = Object.keys(ACCEPTED_TYPES).join(',');
 
   return (
-    <section className="container mx-auto px-4 py-8">
+    <section id="upload" className="container mx-auto px-4 py-8" aria-label="Upload documents">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
