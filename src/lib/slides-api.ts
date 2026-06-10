@@ -35,14 +35,21 @@ export async function generateSlides(params: {
   fileTags: string[];
   slideCount?: number;
 }): Promise<SlideDeck> {
-  const r = await fetch(URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
-    body: JSON.stringify(params),
-  });
+  const { friendlyFromStatus, friendlyFromException } = await import('@/lib/errors');
+  let r: Response;
+  try {
+    r = await fetch(URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+      body: JSON.stringify(params),
+    });
+  } catch (e) {
+    throw new Error(friendlyFromException(e).message);
+  }
   if (!r.ok) {
-    const body = await r.json().catch(() => ({ error: `Error ${r.status}` }));
-    throw new Error(body.error || `Error ${r.status}`);
+    let serverMsg: string | undefined;
+    try { const b = await r.json(); if (typeof b?.error === 'string') serverMsg = b.error; } catch { /* ignore */ }
+    throw new Error(friendlyFromStatus(r.status, r.headers.get('Retry-After'), serverMsg).message);
   }
   return r.json();
 }
