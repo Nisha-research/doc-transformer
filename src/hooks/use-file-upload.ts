@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import { v4 } from '@/lib/uuid';
-import { validateFile, MAX_FILES, type UploadedFile } from '@/lib/file-utils';
+import { validateFileDeep, MAX_FILES, type UploadedFile } from '@/lib/file-utils';
 
 export function useFileUpload() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const addFiles = useCallback((newFiles: FileList | File[]) => {
+  const addFiles = useCallback(async (newFiles: FileList | File[]) => {
     setError(null);
     const fileArray = Array.from(newFiles);
 
@@ -17,7 +17,7 @@ export function useFileUpload() {
 
     const validFiles: UploadedFile[] = [];
     for (const file of fileArray) {
-      const validationError = validateFile(file);
+      const validationError = await validateFileDeep(file);
       if (validationError) {
         setError(validationError);
         return;

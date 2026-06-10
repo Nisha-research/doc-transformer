@@ -27,20 +27,33 @@ export async function streamDocument({
   onDone,
   onError,
 }: StreamDocumentParams) {
-  const resp = await fetch(PROCESS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: await authHeader() },
-    body: JSON.stringify({ documentText, modeId, knowledgeLevel, fileTags }),
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(PROCESS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+      body: JSON.stringify({ documentText, modeId, knowledgeLevel, fileTags }),
+    });
+  } catch {
+    onError("We couldn't reach the server. Check your connection and try again.");
+    return;
+  }
 
   if (!resp.ok) {
-    const body = await resp.json().catch(() => ({ error: "Request failed" }));
-    onError(body.error || `Error ${resp.status}`);
+    const { friendlyFromStatus } = await import("@/lib/errors");
+    const retryAfter = resp.headers.get("Retry-After");
+    let serverMsg: string | undefined;
+    try {
+      const body = await resp.json();
+      if (body && typeof body.error === "string") serverMsg = body.error;
+    } catch { /* ignore */ }
+    const fe = friendlyFromStatus(resp.status, retryAfter, serverMsg);
+    onError(fe.message);
     return;
   }
 
   if (!resp.body) {
-    onError("No response stream");
+    onError("The server didn't return a response. Please retry.");
     return;
   }
 

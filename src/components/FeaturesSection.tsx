@@ -31,7 +31,7 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section className="container mx-auto px-4 py-16">
+    <section id="features" className="container mx-auto px-4 py-16" aria-label="Features">
       <motion.div
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
